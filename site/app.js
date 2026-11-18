@@ -94,9 +94,11 @@ function getFilters() {
 function restoreFilters(params) {
   const grade = params.get('grade');
   const term = params.get('semester');
+  const selectedGrade = grades.includes(grade) ? grade : '';
   query.value = (params.get('q') || '').slice(0, 120);
-  filters.elements.grade.value = grades.includes(grade) ? grade : '';
-  updateSubjectOptions(filters.elements.grade.value, params.get('subject'));
+  const gradeControl = [...filters.elements.grade].find((item) => item.value === selectedGrade);
+  gradeControl.checked = true;
+  updateSubjectOptions(selectedGrade, params.get('subject'));
   semester.value = ['1', '2'].includes(term) ? term : '';
 }
 
@@ -355,10 +357,12 @@ async function playVideo(video, stage, message, play) {
     player = new YT.Player(frame, {
       events: {
         onReady: () => {
+          if (!connected()) return;
           clearTimeout(playerTimer);
           message.hidden = true;
         },
         onError: ({ data }) => {
+          if (!connected()) return;
           clearTimeout(playerTimer);
           if (data === 100) {
             notify('영상이 삭제되었거나 비공개로 전환되어 재생할 수 없습니다. 닫기 버튼으로 목록에 돌아갈 수 있습니다.');
@@ -366,7 +370,9 @@ async function playVideo(video, stage, message, play) {
             notify('앱 안에서 재생할 수 없습니다. YouTube에서 열어 보세요.');
           }
         },
-        onAutoplayBlocked: () => notify('플레이어의 재생 버튼을 눌러 시작해 주세요.'),
+        onAutoplayBlocked: () => {
+          if (connected()) notify('플레이어의 재생 버튼을 눌러 시작해 주세요.');
+        },
       },
     });
   } catch {
