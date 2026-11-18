@@ -29,6 +29,7 @@
           <input type="search" id="query" placeholder="예: 물의 상태 변화, 분수, 환경" maxlength="120" autocomplete="off">
           <button type="submit">검색</button>
         </form>
+        <a class="quiet hero-occasion" id="current-occasion" href="./" hidden>이번 달 계기교육</a>
       </div>
       <div class="hero-art" aria-hidden="true"><div class="art-disc"></div><div class="art-orbit"></div><div class="paper paper-back"></div><div class="paper paper-front"><i></i><b></b><b></b></div><span class="spark spark-one">✦</span><span class="spark spark-two">✦</span><span class="spark spark-three">✧</span></div>
     </section>
@@ -43,6 +44,7 @@
           <div id="grades" class="grades"></div>
         </fieldset>
         <div class="select-field"><label for="subject">교과·활동</label><select id="subject"><option value="">전체 교과·활동</option></select></div>
+        <div class="select-field" id="occasion-month-field" hidden><label for="occasion-month">활용 월</label><select id="occasion-month" disabled><option value="">전체 월</option></select></div>
         <div class="select-field"><label for="semester">학기</label><select id="semester"><option value="">전체 학기</option><option value="1">1학기</option><option value="2">2학기</option></select></div>
       </form>
       <div id="results" class="grid"></div>

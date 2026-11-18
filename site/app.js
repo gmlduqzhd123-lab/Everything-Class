@@ -1,5 +1,5 @@
-import { grades, curriculum, integrated, subjectOptions } from './curriculum.js';
-import { isCatalogResponseUrl, parseCatalog, publishedCatalogRequestUrl, readCatalogCsv } from './catalog.js';
+import { grades, curriculum, integrated, occasionSubject, subjectOptions } from './curriculum.js';
+import { isCatalogResponseUrl, occasionMonths, parseCatalog, publishedCatalogRequestUrl, readCatalogCsv } from './catalog.js';
 
 const $ = (selector) => document.querySelector(selector);
 const search = $('.search');
@@ -7,6 +7,7 @@ const query = $('#query');
 const filters = $('#filters');
 const subject = $('#subject');
 const semester = $('#semester');
+const occasionMonth = $('#occasion-month');
 const results = $('#results');
 const count = $('#results-count');
 const reset = $('#reset');
@@ -74,6 +75,29 @@ function updateSubjectOptions(grade, desired) {
   subject.value = available.includes(desired) ? desired : '';
 }
 
+function renderOccasionMonths() {
+  const current = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric' }).format(new Date());
+  for (let month = 1; month <= 12; month++) {
+    const label = month + '월' + (String(month) === current ? ' · 이번 달' : '');
+    occasionMonth.add(new Option(label, String(month)));
+  }
+  const shortcut = $('#current-occasion');
+  const link = pageUrl();
+  link.searchParams.set('subject', occasionSubject);
+  link.searchParams.set('month', current);
+  link.hash = libraryTitle.id;
+  shortcut.href = link;
+  shortcut.textContent = '이번 달 계기교육 · ' + current + '월';
+  shortcut.hidden = false;
+}
+
+function updateMonthFilter(value) {
+  const applicable = subject.value === occasionSubject;
+  $('#occasion-month-field').hidden = !applicable;
+  occasionMonth.disabled = !applicable;
+  occasionMonth.value = applicable && /^(1[0-2]|[1-9])$/.test(value) ? value : '';
+}
+
 function renderGrades() {
   const nodes = ['', ...grades].map((grade) => {
     const label = element('label');
@@ -89,7 +113,8 @@ function renderGrades() {
 }
 
 function getFilters() {
-  return { q: query.value.trim(), grade: filters.elements.grade.value, subject: subject.value, semester: semester.value };
+  return { q: query.value.trim(), grade: filters.elements.grade.value, subject: subject.value,
+    semester: semester.value, month: occasionMonth.value };
 }
 
 function restoreFilters(params) {
@@ -101,6 +126,7 @@ function restoreFilters(params) {
   gradeControl.checked = true;
   updateSubjectOptions(selectedGrade, params.get('subject'));
   semester.value = ['1', '2'].includes(term) ? term : '';
+  updateMonthFilter(params.get('month'));
 }
 
 function saveFilters() {
@@ -131,6 +157,7 @@ function normalize(value) {
 
 function matches(video, state) {
   if (state.semester && video.semester && state.semester !== video.semester) return false;
+  if (state.month && !video.months.includes(state.month)) return false;
   const eligible = video.classes.some(({ grade, subject: name }) => {
     const inSubject = !state.subject || name === state.subject
       || (state.subject === '통합교과' && integrated.includes(name));
@@ -163,6 +190,10 @@ function displayClasses(video, grade = '') {
   return [...bySubject].map(([name, group]) => group.sort().join('·') + '학년 ' + name);
 }
 
+function displayMonths(video) {
+  return video.months.map((month) => month + '월').join('·');
+}
+
 function createCard(video, state) {
   const card = $('#card-template').content.firstElementChild.cloneNode(true);
   const title = card.querySelector('.card-title');
@@ -182,7 +213,7 @@ function createCard(video, state) {
   card.querySelector('.duration').textContent = stamp(video.duration);
   fillThumbnail(image.querySelector('img'), video.id);
   card.querySelector('.badges').append(...displayClasses(video, state.grade).map((label) => element('span', label, 'badge')));
-  card.querySelector('.card-topic').textContent = [video.topic, video.semester && video.semester + '학기', video.unit].filter(Boolean).join(' · ');
+  card.querySelector('.card-topic').textContent = [video.topic, displayMonths(video), video.semester && video.semester + '학기', video.unit].filter(Boolean).join(' · ');
   card.querySelector('.card-tip').textContent = video.tip;
   return card;
 }
@@ -204,8 +235,18 @@ function renderList() {
   count.textContent = matching.length.toLocaleString('ko') + '개의 영상';
   if (!matching.length) {
     const notice = element('div', '', 'empty');
-    notice.append(element('p', videos.length ? '조건에 맞는 영상이 없습니다.' : '공개된 영상이 아직 없습니다.'));
-    if (!reset.hidden) notice.append(button('검색어와 필터 지우기', clearFilters));
+    const message = state.month ? state.month + '월에 조건에 맞는 계기교육 영상이 없습니다.'
+      : videos.length ? '조건에 맞는 영상이 없습니다.' : '공개된 영상이 아직 없습니다.';
+    notice.append(element('p', message));
+    if (state.month) {
+      notice.append(button('모든 월 보기', () => {
+        occasionMonth.value = '';
+        changeFilters();
+        occasionMonth.focus();
+      }));
+    } else if (!reset.hidden) {
+      notice.append(button('검색어와 필터 지우기', clearFilters));
+    }
     results.replaceChildren(notice);
     return;
   }
@@ -270,7 +311,7 @@ function syncDetail() {
 function renderVideoDetail(content, video) {
   const badges = element('div', '', 'badges');
   badges.append(...displayClasses(video).map((label) => element('span', label, 'badge')));
-  content.append(badges, element('p', [video.channel, stamp(video.duration), video.topic, video.unit].filter(Boolean).join(' · '), 'detail-meta'));
+  content.append(badges, element('p', [video.channel, stamp(video.duration), video.topic, displayMonths(video), video.unit].filter(Boolean).join(' · '), 'detail-meta'));
 
   const stage = element('div', '', 'player-stage');
   const poster = button('', () => playVideo(video, stage, message, play), 'player-poster');
@@ -430,6 +471,7 @@ async function loadCatalog() {
     const records = await fetchLatestVideos(catalog);
     videos = records.map((video) => ({
       ...video,
+      months: occasionMonths(video),
       search: normalize([video.title, video.topic, video.unit, ...video.tags,
         ...video.classes.map(({ subject }) => subject)].filter(Boolean).join(' ')),
     }));
@@ -442,6 +484,7 @@ async function loadCatalog() {
 }
 
 renderGrades();
+renderOccasionMonths();
 restoreFilters(new URLSearchParams(location.search));
 search.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -454,6 +497,7 @@ query.addEventListener('compositionend', changeFilters);
 filters.addEventListener('submit', (event) => event.preventDefault());
 filters.addEventListener('change', (event) => {
   if (event.target.name === 'grade') updateSubjectOptions(event.target.value, subject.value);
+  updateMonthFilter(occasionMonth.value);
   changeFilters();
 });
 reset.addEventListener('click', clearFilters);

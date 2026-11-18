@@ -1,4 +1,4 @@
-import { curriculum } from './curriculum.js';
+import { curriculum, occasionSubject } from './curriculum.js';
 
 const headers = [
   '유튜브 링크', '표시 제목', '채널명', '영상 길이(초)', '학년·교과',
@@ -144,6 +144,15 @@ export function parseCatalog(source) {
   }
   if (errors.length) throw new Error(errors.join('\n'));
   return records;
+}
+
+export function occasionMonths(video) {
+  if (!video.classes.some(({ subject }) => subject === occasionSubject)) return [];
+  const months = video.tags.flatMap((tag) => {
+    const matched = /^(1[0-2]|[1-9])월$/.exec(tag.normalize('NFKC').trim());
+    return matched ? [matched[1]] : [];
+  });
+  return [...new Set(months)].sort((a, b) => Number(a) - Number(b));
 }
 
 export function publishedCatalogUrl(address) {

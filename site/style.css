@@ -22,6 +22,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 .share-site span{font-size:16px}
 .hero{margin-top:34px;position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(105deg,#ece8ff 0%,#f0edff 62%,#e7e4fd 100%);border:1px solid #e8e2fb;border-radius:25px;padding:40px 48px 44px}
 .hero-content{position:relative;z-index:1;width:min(590px,100%)}
+.hero-occasion{margin-top:12px}
 .eyebrow{color:#523cb1;font-weight:800;font-size:13px;margin:0 0 8px;letter-spacing:-.02em}
 h1,h2,h3,p{margin:0}
 h1{font-size:clamp(35px,5.6vw,58px);letter-spacing:-.075em;line-height:1.22;font-weight:800}
