@@ -1,4 +1,5 @@
 import { grades, curriculum, integrated, subjectOptions } from './curriculum.js';
+import { isCatalogResponseUrl, parseCatalog, publishedCatalogUrl, readCatalogCsv } from './catalog.js';
 
 const $ = (selector) => document.querySelector(selector);
 const search = $('.search');
@@ -403,6 +404,21 @@ async function copyLink(url, container) {
   }
 }
 
+async function fetchLatestVideos(catalog) {
+  if (!catalog.source) return catalog.videos;
+  try {
+    const response = await fetch(publishedCatalogUrl(catalog.source), {
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!isCatalogResponseUrl(response.url)) throw new Error('unexpected catalog response URL');
+    return parseCatalog(await readCatalogCsv(response));
+  } catch {
+    return catalog.videos;
+  }
+}
+
 async function loadCatalog() {
   loadState = 'loading';
   count.textContent = '영상 목록을 불러오는 중입니다.';
@@ -411,7 +427,8 @@ async function loadCatalog() {
     const response = await fetch(new URL('./videos.json', import.meta.url), { cache: 'no-cache' });
     if (!response.ok) throw new Error('catalog not available');
     const catalog = await response.json();
-    videos = catalog.videos.map((video) => ({
+    const records = await fetchLatestVideos(catalog);
+    videos = records.map((video) => ({
       ...video,
       search: normalize([video.title, video.topic, video.unit, ...video.tags].filter(Boolean).join(' ')),
     }));
