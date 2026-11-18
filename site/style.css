@@ -111,3 +111,7 @@ body:has(dialog[open]){overflow:hidden}
 @media(max-width:780px){.wrap{width:calc(100% - 38px)}.hero{padding:33px 28px}.hero-art{opacity:.45;right:-61px;scale:.68}.hero-content{width:min(510px,100%)}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:500px){.wrap{width:calc(100% - 28px)}.header-inner{min-height:60px}.brand{font-size:16px}.brand-icon{width:29px;height:29px}.hero{margin-top:20px;padding:24px 17px;border-radius:17px}.hero-art{display:none}.hero-note{font-size:14px;margin-bottom:16px}.search{min-height:52px;gap:8px;padding-inline:10px 5px}.search input{font-size:14px}.search button{min-height:37px;padding-inline:13px;font-size:14px}.library{margin-top:25px}.filters{padding:12px;gap:10px}.grades{gap:4px}.grades span{padding-inline:9px}.grid{grid-template-columns:1fr;gap:14px}.detail-content{padding:14px}.detail-content h2{font-size:22px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;scroll-behavior:auto!important}}
+/* 엽쌤 앱 공통: 📲 앱 설치 · 📱 QR, 하단 문구 */
+.header-actions{display:flex;align-items:center;gap:6px}.ys-chip{white-space:nowrap;gap:3px}.ys-credit a{color:inherit;text-decoration:underline}
+@media(max-width:560px){.ys-wide{display:none}.header-actions .quiet{padding:6px 10px}.share-site{font-size:0;gap:0}.share-site span{font-size:16px}.brand{white-space:nowrap}}
+@media(max-width:400px){.brand{font-size:15px;gap:7px}.header-actions{gap:4px}.header-actions .quiet{padding:6px 8px}}

@@ -1,0 +1,16 @@
+{
+  "id": "/Everything-Class/",
+  "name": "초등 수업 대백과",
+  "short_name": "수업 대백과",
+  "description": "초등학교 1~6학년 교과와 계기교육에 활용할 수 있는 수업 영상 자료실",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -31,6 +31,15 @@ for (const name of ['index.html', 'style.css', ...moduleNames]) {
   await writeFile(new URL(name, staging), asset);
   revision.update(name + '\0').update(asset).update('\0');
 }
+// 엽쌤 앱 공통 파일(앱 설치·QR·공유 그림·아이콘·서비스 워커)
+const sharedFiles = ['ys-install.js', 'ys-qr.js', 'qr.svg', 'og-image.jpg', 'manifest.webmanifest', 'sw.js',
+  'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
+await mkdir(new URL('icons/', staging), { recursive: true });
+for (const name of sharedFiles) {
+  const asset = await readFile(new URL('../site/' + name, import.meta.url));
+  await writeFile(new URL(name, staging), asset);
+  revision.update(name + '\0').update(asset).update('\0');
+}
 await writeFile(new URL('videos.json', staging), catalog);
 await writeFile(new URL('revision.txt', staging), revision.update(catalog).digest('hex') + '\n');
 console.log('영상 ' + records.length + '건 · 학년–분류 ' + covered.size + '/' + expected.length + '개 조합');
