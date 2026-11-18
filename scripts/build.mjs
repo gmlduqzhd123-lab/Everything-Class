@@ -16,8 +16,13 @@ const missing = expected.filter((pair) => !covered.has(pair));
 await mkdir(staging, { recursive: true });
 const catalog = JSON.stringify({ videos: records, source: catalogSource }) + '\n';
 const revision = createHash('sha256');
+const entrypoint = await readFile(new URL('../site/app.js', import.meta.url));
+const entryVersion = createHash('sha256').update(entrypoint).digest('hex').slice(0, 12);
 for (const name of ['index.html', 'style.css', 'app.js', 'curriculum.js', 'catalog.js']) {
-  const asset = await readFile(new URL('../site/' + name, import.meta.url));
+  let asset = name === 'app.js' ? entrypoint : await readFile(new URL('../site/' + name, import.meta.url));
+  if (name === 'index.html') {
+    asset = asset.toString('utf8').replace('src="./app.js"', 'src="./app.js?v=' + entryVersion + '"');
+  }
   await writeFile(new URL(name, staging), asset);
   revision.update(name + '\0').update(asset).update('\0');
 }
