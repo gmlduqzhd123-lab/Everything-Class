@@ -92,6 +92,26 @@ function seconds(input, label, optional = false) {
   return Number(input);
 }
 
+export function lessonUnits(video) {
+  if (!video.unit) return [];
+  if (!/^[1-6]학년\s*:\s*[^=]+\s*=/.test(video.unit)) {
+    return video.classes.map((item) => ({ ...item, term: video.semester, label: video.unit }));
+  }
+
+  const units = [];
+  for (const part of video.unit.split('|')) {
+    const match = /^([1-6])학년\s*:\s*([^=]+?)\s*=\s*([12])?\s*\/\s*(.+)$/.exec(part.trim());
+    if (!match) throw new Error('단원은 “4학년:과학=1/2. 물의 상태 변화” 형식으로 입력하세요.');
+    const [, grade, subject, term = '', label] = match;
+    if (!video.classes.some((item) => item.grade === grade && item.subject === subject)
+        || (video.semester && term && term !== video.semester)) {
+      throw new Error('단원에 입력한 학년·교과 또는 학기가 영상 분류와 일치하지 않습니다.');
+    }
+    units.push({ grade, subject, term: term || video.semester, label: label.trim() });
+  }
+  return units;
+}
+
 function parseRow(cells) {
   if (cells.length !== headers.length) throw new Error('표 열 수가 공개목록의 헤더와 다릅니다.');
   for (const [index, header] of headers.slice(0, 8).entries()) {
@@ -117,8 +137,10 @@ function parseRow(cells) {
     throw new Error('마지막 확인일은 YYYY-MM-DD 형식으로 입력하세요.');
   }
 
-  return { id, title, channel, duration, classes, topic, tip, checkedAt, semester, unit,
+  const video = { id, title, channel, duration, classes, topic, tip, checkedAt, semester, unit,
     tags: [...new Set(tags.split('|').map((tag) => tag.trim()).filter(Boolean))], start, end };
+  lessonUnits(video);
+  return video;
 }
 
 export function parseCatalog(source) {

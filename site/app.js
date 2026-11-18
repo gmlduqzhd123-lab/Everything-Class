@@ -1,5 +1,5 @@
 import { grades, curriculum, integrated, occasionSubject, subjectOptions } from './curriculum.js';
-import { isCatalogResponseUrl, occasionMonths, parseCatalog, publishedCatalogRequestUrl, readCatalogCsv } from './catalog.js';
+import { isCatalogResponseUrl, lessonUnits, occasionMonths, parseCatalog, publishedCatalogRequestUrl, readCatalogCsv } from './catalog.js';
 
 const $ = (selector) => document.querySelector(selector);
 const search = $('.search');
@@ -8,6 +8,7 @@ const filters = $('#filters');
 const subject = $('#subject');
 const semester = $('#semester');
 const occasionMonth = $('#occasion-month');
+const unit = $('#unit');
 const results = $('#results');
 const count = $('#results-count');
 const reset = $('#reset');
@@ -114,7 +115,7 @@ function renderGrades() {
 
 function getFilters() {
   return { q: query.value.trim(), grade: filters.elements.grade.value, subject: subject.value,
-    semester: semester.value, month: occasionMonth.value };
+    semester: semester.value, month: occasionMonth.value, unit: unit.value };
 }
 
 function restoreFilters(params) {
@@ -127,6 +128,7 @@ function restoreFilters(params) {
   updateSubjectOptions(selectedGrade, params.get('subject'));
   semester.value = ['1', '2'].includes(term) ? term : '';
   updateMonthFilter(params.get('month'));
+  updateUnitFilter(params.get('unit'));
 }
 
 function saveFilters() {
@@ -155,14 +157,42 @@ function normalize(value) {
   return value.normalize('NFKC').toLocaleLowerCase('ko').replace(/\s+/g, '');
 }
 
+function inClass(item, state) {
+  const inSubject = !state.subject || item.subject === state.subject
+    || (state.subject === '통합교과' && integrated.includes(item.subject));
+  return inSubject && (!state.grade || item.grade === state.grade);
+}
+
+function unitLabel({ term, label }) {
+  return term ? term + '학기 · ' + label : label;
+}
+
+function matchingUnits(video, state) {
+  return video.units.filter((entry) => inClass(entry, state)
+    && (!state.semester || !entry.term || entry.term === state.semester));
+}
+
+function updateUnitFilter(desired) {
+  const state = getFilters();
+  const applicable = Boolean(state.grade && state.subject && state.subject !== occasionSubject);
+  const labels = applicable ? [...new Set(videos.flatMap((video) => matchingUnits(video, state).map(unitLabel)))] : [];
+  labels.sort((left, right) => left.localeCompare(right, 'ko', { numeric: true }));
+  unit.replaceChildren(new Option('전체 단원', ''), ...labels.map((label) => new Option(label, label)));
+  $('#unit-field').hidden = !applicable;
+  unit.disabled = !labels.length;
+  unit.value = labels.includes(desired) ? desired : '';
+}
+
 function matches(video, state) {
   if (state.semester && video.semester && state.semester !== video.semester) return false;
   if (state.month && !video.months.includes(state.month)) return false;
-  const eligible = video.classes.some(({ grade, subject: name }) => {
-    const inSubject = !state.subject || name === state.subject
-      || (state.subject === '통합교과' && integrated.includes(name));
-    return inSubject && (!state.grade || grade === state.grade);
+  const eligible = video.classes.some((item) => {
+    if (!inClass(item, state)) return false;
+    if (!state.semester) return true;
+    const units = video.units.filter((entry) => entry.grade === item.grade && entry.subject === item.subject);
+    return !units.length || units.some((entry) => !entry.term || entry.term === state.semester);
   });
+  if (state.unit && !matchingUnits(video, state).some((entry) => unitLabel(entry) === state.unit)) return false;
   const words = state.q.split(/\s+/).map(normalize).filter(Boolean);
   return eligible && words.every((word) => video.search.includes(word));
 }
@@ -213,7 +243,8 @@ function createCard(video, state) {
   card.querySelector('.duration').textContent = stamp(video.duration);
   fillThumbnail(image.querySelector('img'), video.id);
   card.querySelector('.badges').append(...displayClasses(video, state.grade).map((label) => element('span', label, 'badge')));
-  card.querySelector('.card-topic').textContent = [video.topic, displayMonths(video), video.semester && video.semester + '학기', video.unit].filter(Boolean).join(' · ');
+  const units = [...new Set(matchingUnits(video, state).map(unitLabel))];
+  card.querySelector('.card-topic').textContent = [video.topic, displayMonths(video), ...(units.length ? units : [video.semester && video.semester + '학기'])].filter(Boolean).join(' · ');
   card.querySelector('.card-tip').textContent = video.tip;
   return card;
 }
@@ -311,7 +342,11 @@ function syncDetail() {
 function renderVideoDetail(content, video) {
   const badges = element('div', '', 'badges');
   badges.append(...displayClasses(video).map((label) => element('span', label, 'badge')));
-  content.append(badges, element('p', [video.channel, stamp(video.duration), video.topic, displayMonths(video), video.unit].filter(Boolean).join(' · '), 'detail-meta'));
+  content.append(badges, element('p', [video.channel, stamp(video.duration), video.topic, displayMonths(video)].filter(Boolean).join(' · '), 'detail-meta'));
+  if (video.units.length) {
+    const entries = video.units.map((entry) => entry.grade + '학년 ' + entry.subject + ' · ' + unitLabel(entry));
+    content.append(element('p', [...new Set(entries)].join(' / '), 'detail-meta'));
+  }
 
   const stage = element('div', '', 'player-stage');
   const poster = button('', () => playVideo(video, stage, message, play), 'player-poster');
@@ -472,6 +507,7 @@ async function loadCatalog() {
     videos = records.map((video) => ({
       ...video,
       months: occasionMonths(video),
+      units: lessonUnits(video),
       search: normalize([video.title, video.topic, video.unit, ...video.tags,
         ...video.classes.map(({ subject }) => subject)].filter(Boolean).join(' ')),
     }));
@@ -479,6 +515,7 @@ async function loadCatalog() {
   } catch {
     loadState = 'error';
   }
+  updateUnitFilter(new URLSearchParams(location.search).get('unit'));
   renderList();
   syncDetail();
 }
@@ -498,6 +535,7 @@ filters.addEventListener('submit', (event) => event.preventDefault());
 filters.addEventListener('change', (event) => {
   if (event.target.name === 'grade') updateSubjectOptions(event.target.value, subject.value);
   updateMonthFilter(occasionMonth.value);
+  if (event.target !== unit) updateUnitFilter(unit.value);
   changeFilters();
 });
 reset.addEventListener('click', clearFilters);
