@@ -70,7 +70,7 @@ function subjectsFor(grade) {
 
 function updateSubjectOptions(grade, desired) {
   const available = subjectsFor(grade);
-  subject.replaceChildren(new Option('전체 교과', ''), ...available.map((name) => new Option(name, name)));
+  subject.replaceChildren(new Option('전체 교과·활동', ''), ...available.map((name) => new Option(name, name)));
   subject.value = available.includes(desired) ? desired : '';
 }
 
@@ -430,7 +430,8 @@ async function loadCatalog() {
     const records = await fetchLatestVideos(catalog);
     videos = records.map((video) => ({
       ...video,
-      search: normalize([video.title, video.topic, video.unit, ...video.tags].filter(Boolean).join(' ')),
+      search: normalize([video.title, video.topic, video.unit, ...video.tags,
+        ...video.classes.map(({ subject }) => subject)].filter(Boolean).join(' ')),
     }));
     loadState = 'ready';
   } catch {

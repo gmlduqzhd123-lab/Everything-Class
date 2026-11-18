@@ -16,17 +16,22 @@ const missing = expected.filter((pair) => !covered.has(pair));
 await mkdir(staging, { recursive: true });
 const catalog = JSON.stringify({ videos: records, source: catalogSource }) + '\n';
 const revision = createHash('sha256');
-const entrypoint = await readFile(new URL('../site/app.js', import.meta.url));
-const entryVersion = createHash('sha256').update(entrypoint).digest('hex').slice(0, 12);
-for (const name of ['index.html', 'style.css', 'app.js', 'curriculum.js', 'catalog.js']) {
-  let asset = name === 'app.js' ? entrypoint : await readFile(new URL('../site/' + name, import.meta.url));
+const moduleNames = ['app.js', 'curriculum.js', 'catalog.js'];
+const modules = new Map(await Promise.all(moduleNames.map(async (name) => [
+  name, await readFile(new URL('../site/' + name, import.meta.url), 'utf8'),
+])));
+const moduleVersion = createHash('sha256').update(JSON.stringify([...modules])).digest('hex').slice(0, 12);
+for (const name of ['index.html', 'style.css', ...moduleNames]) {
+  let asset = modules.get(name) ?? await readFile(new URL('../site/' + name, import.meta.url));
   if (name === 'index.html') {
-    asset = asset.toString('utf8').replace('src="./app.js"', 'src="./app.js?v=' + entryVersion + '"');
+    asset = asset.toString('utf8').replace('src="./app.js"', 'src="./app.js?v=' + moduleVersion + '"');
+  } else if (modules.has(name)) {
+    asset = asset.replace(/(from '\.\/(?:curriculum|catalog)\.js)'/g, '$1?v=' + moduleVersion + "'");
   }
   await writeFile(new URL(name, staging), asset);
   revision.update(name + '\0').update(asset).update('\0');
 }
 await writeFile(new URL('videos.json', staging), catalog);
 await writeFile(new URL('revision.txt', staging), revision.update(catalog).digest('hex') + '\n');
-console.log('영상 ' + records.length + '건 · 학년–교과 ' + covered.size + '/' + expected.length + '개 조합');
-if (missing.length) console.warn('자료가 없는 학년–교과 ' + missing.join(', '));
+console.log('영상 ' + records.length + '건 · 학년–분류 ' + covered.size + '/' + expected.length + '개 조합');
+if (missing.length) console.warn('자료가 없는 학년–분류 ' + missing.join(', '));
