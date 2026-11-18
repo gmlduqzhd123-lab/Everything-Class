@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="초등학교 1~6학년 수업에 활용할 수 있는 영상 자료를 학년, 교과, 주제별로 찾아보세요.">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>초등 수업 대백과</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">본문 바로가기</a>
+  <header class="header">
+    <div class="wrap header-inner">
+      <a class="brand" href="./" aria-label="초등 수업 대백과 홈"><span class="brand-icon" aria-hidden="true"><i></i></span>초등 수업 대백과</a>
+      <button class="quiet share-site" type="button"><span aria-hidden="true">↗</span> 사이트 공유</button>
+    </div>
+  </header>
+  <main id="main" class="wrap">
+    <section class="hero" aria-labelledby="intro">
+      <div class="hero-content">
+        <p class="eyebrow">선생님을 위한 수업 영상 자료실</p>
+        <h1 id="intro">초등 수업 대백과</h1>
+        <p class="hero-note">수업에 필요한 영상을 학년, 교과, 주제로 찾아보세요.</p>
+        <form class="search" role="search">
+          <label class="sr-only" for="query">수업 영상 검색</label>
+          <span class="search-icon" aria-hidden="true"></span>
+          <input type="search" id="query" placeholder="예: 물의 상태 변화, 분수, 환경" maxlength="120" autocomplete="off">
+          <button type="submit">검색</button>
+        </form>
+      </div>
+      <div class="hero-art" aria-hidden="true"><div class="art-disc"></div><div class="art-orbit"></div><div class="paper paper-back"></div><div class="paper paper-front"><i></i><b></b><b></b></div><span class="spark spark-one">✦</span><span class="spark spark-two">✦</span><span class="spark spark-three">✧</span></div>
+    </section>
+    <section class="library" aria-labelledby="library-title">
+      <div class="section-head">
+        <div><h2 id="library-title" tabindex="-1">수업 영상</h2><p id="results-count" role="status">영상 목록을 불러오는 중입니다.</p></div>
+        <button id="reset" class="quiet" type="button" hidden>필터 초기화</button>
+      </div>
+      <form id="filters" class="filters" aria-label="영상 필터">
+        <fieldset class="grade-field">
+          <legend>학년</legend>
+          <div id="grades" class="grades"></div>
+        </fieldset>
+        <div class="select-field"><label for="subject">교과</label><select id="subject"><option value="">전체 교과</option></select></div>
+        <div class="select-field"><label for="semester">학기</label><select id="semester"><option value="">전체 학기</option><option value="1">1학기</option><option value="2">2학기</option></select></div>
+      </form>
+      <div id="results" class="grid"></div>
+      <div id="more-row" class="more-row" hidden><button id="more" class="quiet" type="button">영상 더 보기</button></div>
+      <noscript><p>영상 검색과 재생을 이용하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+    </section>
+  </main>
+  <footer class="footer"><div class="wrap"><strong>초등 수업 대백과</strong><p>영상은 각 YouTube 채널에서 제공하며, 재생을 누르면 YouTube 플레이어가 로드됩니다.</p></div></footer>
+  <dialog id="detail" aria-labelledby="video-title"><div id="detail-body"></div></dialog>
+  <p id="toast" class="toast" role="status" hidden></p>
+  <template id="card-template">
+    <article class="card">
+      <a class="card-image"><img loading="lazy" decoding="async" alt=""><span class="play" aria-hidden="true"></span><span class="duration"></span></a>
+      <div class="card-body"><div class="badges"></div><h3><a class="card-title"></a></h3><p class="card-topic"></p><p class="card-tip"></p></div>
+    </article>
+  </template>
+</body>
+</html>
