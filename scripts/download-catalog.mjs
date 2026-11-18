@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises';
-import { isCatalogResponseUrl, publishedCatalogUrl, readCatalogCsv } from '../site/catalog.js';
+import { isCatalogResponseUrl, publishedCatalogRequestUrl, readCatalogCsv } from '../site/catalog.js';
 
 const destination = process.argv[2];
 const configuredUrl = process.env.PUBLIC_CATALOG_CSV_URL;
@@ -7,7 +7,7 @@ if (!destination || !configuredUrl) {
   throw new Error('공개목록 CSV 주소와 내려받을 파일 경로가 필요합니다.');
 }
 
-let url = publishedCatalogUrl(configuredUrl);
+let url = publishedCatalogRequestUrl(configuredUrl);
 
 const signal = AbortSignal.timeout(25000);
 let response;

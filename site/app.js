@@ -1,5 +1,5 @@
 import { grades, curriculum, integrated, subjectOptions } from './curriculum.js';
-import { isCatalogResponseUrl, parseCatalog, publishedCatalogUrl, readCatalogCsv } from './catalog.js';
+import { isCatalogResponseUrl, parseCatalog, publishedCatalogRequestUrl, readCatalogCsv } from './catalog.js';
 
 const $ = (selector) => document.querySelector(selector);
 const search = $('.search');
@@ -407,7 +407,7 @@ async function copyLink(url, container) {
 async function fetchLatestVideos(catalog) {
   if (!catalog.source) return catalog.videos;
   try {
-    const response = await fetch(publishedCatalogUrl(catalog.source), {
+    const response = await fetch(publishedCatalogRequestUrl(catalog.source), {
       cache: 'no-store',
       credentials: 'omit',
       signal: AbortSignal.timeout(5000),

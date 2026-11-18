@@ -158,6 +158,12 @@ export function publishedCatalogUrl(address) {
   return url;
 }
 
+export function publishedCatalogRequestUrl(address) {
+  const url = publishedCatalogUrl(address);
+  url.searchParams.set('catalog_minute', String(Math.floor(Date.now() / 60000)));
+  return url;
+}
+
 export function isCatalogResponseUrl(address) {
   const url = new URL(address);
   const trustedHost = url.hostname === 'docs.google.com' || url.hostname.endsWith('.googleusercontent.com');
