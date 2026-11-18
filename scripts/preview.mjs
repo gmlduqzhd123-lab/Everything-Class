@@ -7,6 +7,7 @@ const types = {
   'curriculum.js': 'text/javascript; charset=utf-8',
   'style.css': 'text/css; charset=utf-8',
   'videos.json': 'application/json; charset=utf-8',
+  'revision.txt': 'text/plain; charset=utf-8',
 };
 const port = Number(process.env.LESSON_PREVIEW_PORT || 4173);
 createServer(async (request, response) => {

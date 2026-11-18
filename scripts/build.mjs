@@ -1,4 +1,5 @@
-import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { curriculum, grades } from '../site/curriculum.js';
 
 export const headers = [
@@ -81,7 +82,7 @@ function classPairs(input) {
   return labels.map((label) => {
     const pair = /^([1-6])\s*학년\s*:\s*(.+)$/.exec(label);
     if (!pair || !curriculum[pair[1]].includes(pair[2])) {
-      throw new Error('등록할 수 없는 학년·교과 조합 ' + label + ' (예: 4학년:과학)');
+      throw new Error('등록할 수 없는 학년·교과 조합입니다. (예: 4학년:과학)');
     }
     return { grade: pair[1], subject: pair[2] };
   });
@@ -122,11 +123,11 @@ function parseRow(cells) {
     tags: [...new Set(tags.split('|').map((tag) => tag.trim()).filter(Boolean))], start, end };
 }
 
-const input = new URL('../catalog/videos.csv', import.meta.url);
+const input = process.env.CATALOG_FILE || new URL('../catalog/videos.csv', import.meta.url);
 const staging = new URL('../dist/', import.meta.url);
 const [columns, ...rows] = parseCsv(await readFile(input, 'utf8'));
 if (JSON.stringify(columns) !== JSON.stringify(headers)) {
-  throw new Error('catalog/videos.csv의 열 제목과 순서를 공개목록 원본과 같게 유지해 주세요.');
+  throw new Error('영상 목록의 열 제목과 순서를 공개목록 원본과 같게 유지해 주세요.');
 }
 
 const records = [];
@@ -151,9 +152,14 @@ const expected = grades.flatMap((grade) => curriculum[grade].map((subject) => gr
 const missing = expected.filter((pair) => !covered.has(pair));
 
 await mkdir(staging, { recursive: true });
+const catalog = JSON.stringify({ videos: records }) + '\n';
+const revision = createHash('sha256');
 for (const name of ['index.html', 'style.css', 'app.js', 'curriculum.js']) {
-  await cp(new URL('../site/' + name, import.meta.url), new URL(name, staging));
+  const asset = await readFile(new URL('../site/' + name, import.meta.url));
+  await writeFile(new URL(name, staging), asset);
+  revision.update(name + '\0').update(asset).update('\0');
 }
-await writeFile(new URL('videos.json', staging), JSON.stringify({ videos: records }) + '\n');
+await writeFile(new URL('videos.json', staging), catalog);
+await writeFile(new URL('revision.txt', staging), revision.update(catalog).digest('hex') + '\n');
 console.log('영상 ' + records.length + '건 · 학년–교과 ' + covered.size + '/' + expected.length + '개 조합');
 if (missing.length) console.warn('자료가 없는 학년–교과 ' + missing.join(', '));
