@@ -32,30 +32,27 @@
       <div class="header-actions">
         <button class="quiet ys-chip" type="button" data-ys-install>📲 <span class="ys-wide">앱&nbsp;</span>설치</button>
         <button class="quiet ys-chip" type="button" data-qr aria-label="QR 코드로 접속">📱 QR</button>
-        <button class="quiet share-site" type="button"><span aria-hidden="true">↗</span> 사이트 공유</button>
+        <button class="quiet share-site" type="button" aria-label="사이트 공유"><span aria-hidden="true">↗</span> 사이트 공유</button>
       </div>
     </div>
   </header>
   <main id="main" class="wrap">
     <section class="hero" aria-labelledby="intro">
-      <div class="hero-content">
-        <p class="eyebrow">선생님을 위한 수업 영상 자료실</p>
-        <h1 id="intro">초등 수업 대백과</h1>
-        <p class="hero-note">교과 수업과 계기교육에 필요한 영상을 찾아보세요.</p>
+      <h1 id="intro">수업 영상 찾기</h1>
+      <div class="hero-search">
         <form class="search" role="search">
           <label class="sr-only" for="query">수업 영상 검색</label>
           <span class="search-icon" aria-hidden="true"></span>
-          <input type="search" id="query" placeholder="예: 물의 상태 변화, 분수, 환경" maxlength="120" autocomplete="off">
+          <input type="search" id="query" placeholder="예: 4학년 과학 물의 상태 변화" maxlength="120" autocomplete="off">
           <button type="submit">검색</button>
         </form>
         <a class="quiet hero-occasion" id="current-occasion" href="./" hidden>이번 달 계기교육</a>
       </div>
-      <div class="hero-art" aria-hidden="true"><div class="art-disc"></div><div class="art-orbit"></div><div class="paper paper-back"></div><div class="paper paper-front"><i></i><b></b><b></b></div><span class="spark spark-one">✦</span><span class="spark spark-two">✦</span><span class="spark spark-three">✧</span></div>
     </section>
     <section class="library" aria-labelledby="library-title">
-      <div class="section-head">
-        <div><h2 id="library-title" tabindex="-1">수업 영상</h2><p id="results-count" role="status">영상 목록을 불러오는 중입니다.</p></div>
-        <button id="reset" class="quiet" type="button" hidden>필터 초기화</button>
+      <div class="library-nav" role="group" aria-label="영상 자료실">
+        <button type="button" id="browse" class="view-button" aria-pressed="true">수업 영상</button>
+        <button type="button" id="video-shelf" class="view-button" aria-pressed="false">내 수업 영상함</button>
       </div>
       <form id="filters" class="filters" aria-label="영상 필터">
         <fieldset class="grade-field">
@@ -65,8 +62,33 @@
         <div class="select-field"><label for="subject">교과·활동</label><select id="subject"><option value="">전체 교과·활동</option></select></div>
         <div class="select-field" id="occasion-month-field" hidden><label for="occasion-month">활용 월</label><select id="occasion-month" disabled><option value="">전체 월</option></select></div>
         <div class="select-field"><label for="semester">학기</label><select id="semester"><option value="">전체 학기</option><option value="1">1학기</option><option value="2">2학기</option></select></div>
-        <div class="select-field" id="unit-field" hidden><label for="unit">단원</label><select id="unit" disabled><option value="">전체 단원</option></select></div>
+        <div class="select-field" id="unit-field"><label for="unit">단원</label><select id="unit" disabled><option value="">학년·교과를 선택하세요</option></select></div>
+        <div class="select-field"><label for="length">영상 길이</label><select id="length">
+          <option value="">전체 길이</option>
+          <option value="short">3분 이하</option>
+          <option value="medium">3분 초과~10분</option>
+          <option value="long">10분 초과</option>
+        </select></div>
       </form>
+      <div id="active-filters" class="active-filters" role="group" aria-label="선택한 검색 조건" hidden></div>
+      <div id="shelf-controls" class="shelf-controls" hidden>
+        <div class="shelf-switch" role="group" aria-label="저장된 영상 보기">
+          <button type="button" class="quiet view-button" data-shelf="favorites" aria-pressed="true">즐겨찾기</button>
+          <button type="button" class="quiet view-button" data-shelf="recent" aria-pressed="false">최근 재생</button>
+        </div>
+        <p>이 브라우저에 저장됩니다.</p>
+      </div>
+      <div class="results-toolbar">
+        <div class="results-heading">
+          <h2 id="library-title" tabindex="-1">전체 영상</h2>
+          <p id="results-count" role="status">영상 목록을 불러오는 중입니다.</p>
+        </div>
+        <div id="list-actions" class="list-actions">
+          <label class="sr-only" for="order">영상 정렬</label>
+          <select id="order"><option value="">기본순</option><option value="short">짧은 순</option></select>
+          <button id="share-list" type="button" class="quiet" hidden>목록 링크 복사</button>
+        </div>
+      </div>
       <div id="results" class="grid"></div>
       <div id="more-row" class="more-row" hidden><button id="more" class="quiet" type="button">영상 더 보기</button></div>
       <noscript><p>영상 검색과 재생을 이용하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
@@ -78,7 +100,7 @@
   <template id="card-template">
     <article class="card">
       <a class="card-image"><img loading="lazy" decoding="async" alt=""><span class="play" aria-hidden="true"></span><span class="duration"></span></a>
-      <div class="card-body"><div class="badges"></div><h3><a class="card-title"></a></h3><p class="card-topic"></p><p class="card-tip"></p></div>
+      <div class="card-body"><div class="badges"></div><h3><a class="card-title"></a></h3><p class="card-topic"></p><div class="card-actions"><p class="card-channel"></p><button type="button" class="quiet save-video">저장</button></div></div>
     </article>
   </template>
   <script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));</script>

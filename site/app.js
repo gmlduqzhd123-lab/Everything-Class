@@ -9,25 +9,43 @@ const subject = $('#subject');
 const semester = $('#semester');
 const occasionMonth = $('#occasion-month');
 const unit = $('#unit');
+const length = $('#length');
+const order = $('#order');
+const activeFilters = $('#active-filters');
 const results = $('#results');
 const count = $('#results-count');
-const reset = $('#reset');
 const libraryTitle = $('#library-title');
 const moreRow = $('#more-row');
 const detail = $('#detail');
 const detailBody = $('#detail-body');
 const toast = $('#toast');
 const pageSize = 12;
+const storageKey = 'everything-class-personal-v1';
+const lengthLabels = { short: '3분 이하', medium: '3분 초과~10분', long: '10분 초과' };
+const filterLabels = { q: '검색어', grade: '학년', subject: '교과·활동', semester: '학기',
+  month: '활용 월', unit: '단원', length: '영상 길이' };
+const subjectPattern = [...subjectOptions].sort((a, b) => b.length - a.length)
+  .map((name) => name.replace(/ /g, '\\s*')).join('|');
+const searchFacets = new RegExp('(^|[\\s,])(?:([1-6])\\s*학년|([12])\\s*학기|('
+  + subjectPattern + '))(?=$|[\\s,])', 'g');
 
 let videos = [];
+let videosById = new Map();
 let loadState = 'loading';
 let visible = pageSize;
+let searchText = '';
+let selectedUnit = '';
+let currentMonth;
+let view = 'browse';
+let shelf = 'favorites';
+const personal = readPersonal();
 let player;
 let playerApi;
 let playerTimer;
 let toastTimer;
 let renderedVideo;
-let detailTrigger;
+let detailReturn;
+let shelfNeedsRender = false;
 
 function element(tag, content, className) {
   const node = document.createElement(tag);
@@ -56,6 +74,14 @@ function videoUrl(id) {
   return url;
 }
 
+function listUrl() {
+  const url = pageUrl();
+  for (const [key, value] of Object.entries(getFilters())) {
+    if (value) url.searchParams.set(key, value);
+  }
+  return url;
+}
+
 function updateUrl(update, method = 'replaceState', newState = history.state) {
   const url = new URL(location.href);
   url.hash = '';
@@ -77,18 +103,17 @@ function updateSubjectOptions(grade, desired) {
 }
 
 function renderOccasionMonths() {
-  const current = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric' }).format(new Date());
+  currentMonth = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric' }).format(new Date());
   for (let month = 1; month <= 12; month++) {
-    const label = month + '월' + (String(month) === current ? ' · 이번 달' : '');
+    const label = month + '월' + (String(month) === currentMonth ? ' · 이번 달' : '');
     occasionMonth.add(new Option(label, String(month)));
   }
   const shortcut = $('#current-occasion');
   const link = pageUrl();
   link.searchParams.set('subject', occasionSubject);
-  link.searchParams.set('month', current);
-  link.hash = libraryTitle.id;
+  link.searchParams.set('month', currentMonth);
   shortcut.href = link;
-  shortcut.textContent = '이번 달 계기교육 · ' + current + '월';
+  shortcut.textContent = '이번 달 계기교육 · ' + currentMonth + '월';
   shortcut.hidden = false;
 }
 
@@ -114,21 +139,25 @@ function renderGrades() {
 }
 
 function getFilters() {
-  return { q: query.value.trim(), grade: filters.elements.grade.value, subject: subject.value,
-    semester: semester.value, month: occasionMonth.value, unit: unit.value };
+  return { q: searchText, grade: filters.elements.grade.value, subject: subject.value,
+    semester: semester.value, month: occasionMonth.value, unit: selectedUnit, length: length.value, order: order.value };
 }
 
 function restoreFilters(params) {
-  const grade = params.get('grade');
-  const term = params.get('semester');
-  const selectedGrade = grades.includes(grade) ? grade : '';
-  query.value = (params.get('q') || '').slice(0, 120);
-  const gradeControl = [...filters.elements.grade].find((item) => item.value === selectedGrade);
+  applyFilters(Object.fromEntries(params));
+}
+
+function applyFilters(state) {
+  const grade = grades.includes(state.grade) ? state.grade : '';
+  searchText = query.value = (state.q || '').slice(0, 120);
+  const gradeControl = [...filters.elements.grade].find((item) => item.value === grade);
   gradeControl.checked = true;
-  updateSubjectOptions(selectedGrade, params.get('subject'));
-  semester.value = ['1', '2'].includes(term) ? term : '';
-  updateMonthFilter(params.get('month'));
-  updateUnitFilter(params.get('unit'));
+  updateSubjectOptions(grade, state.subject);
+  semester.value = ['1', '2'].includes(state.semester) ? state.semester : '';
+  length.value = Object.hasOwn(lengthLabels, state.length) ? state.length : '';
+  order.value = state.order === 'short' ? 'short' : '';
+  updateMonthFilter(state.month);
+  updateUnitFilter(state.unit);
 }
 
 function saveFilters() {
@@ -144,13 +173,37 @@ function saveFilters() {
 function changeFilters() {
   saveFilters();
   visible = pageSize;
+  $('#list-actions .manual-link')?.remove();
   renderList();
 }
 
 function clearFilters() {
-  restoreFilters(new URLSearchParams());
+  applyFilters({});
   changeFilters();
-  libraryTitle.focus();
+  query.focus({ preventScroll: true });
+}
+
+function interpretSearch(value, state) {
+  const input = value.normalize('NFKC').trim();
+  const matches = [...input.matchAll(searchFacets)];
+  const terms = matches.map(([, , grade, semester, subject]) => ({
+    grade, semester, subject: subjectOptions.find((name) => subject && normalize(name) === normalize(subject)),
+  }));
+  const facets = {};
+  for (const key of ['grade', 'semester', 'subject']) {
+    const options = [...new Set(terms.map((term) => term[key]).filter(Boolean))];
+    if (options.length === 1) facets[key] = options[0];
+  }
+  const available = subjectsFor(facets.grade || state.grade);
+  if (facets.subject && !available.includes(facets.subject)) delete facets.subject;
+  let index = 0;
+  const q = input.replace(searchFacets, (match, prefix) => {
+    const term = terms[index++];
+    return Object.keys(facets).some((key) => facets[key] === term[key]) ? prefix : match;
+  }).replace(/[\s,]+/g, ' ').trim();
+  const next = { ...state, ...facets, q };
+  if (next.grade !== state.grade || next.subject !== state.subject || next.semester !== state.semester) next.unit = '';
+  return next;
 }
 
 function normalize(value) {
@@ -177,15 +230,19 @@ function updateUnitFilter(desired) {
   const applicable = Boolean(state.grade && state.subject && state.subject !== occasionSubject);
   const labels = applicable ? [...new Set(videos.flatMap((video) => matchingUnits(video, state).map(unitLabel)))] : [];
   labels.sort((left, right) => left.localeCompare(right, 'ko', { numeric: true }));
-  unit.replaceChildren(new Option('전체 단원', ''), ...labels.map((label) => new Option(label, label)));
-  $('#unit-field').hidden = !applicable;
+  const placeholder = !applicable ? '학년·교과를 선택하세요'
+    : loadState === 'loading' ? '단원을 불러오는 중' : labels.length ? '전체 단원' : '선택할 단원 없음';
+  unit.replaceChildren(new Option(placeholder, ''), ...labels.map((label) => new Option(label, label)));
+  $('#unit-field').hidden = state.subject === occasionSubject;
   unit.disabled = !labels.length;
   unit.value = labels.includes(desired) ? desired : '';
+  selectedUnit = applicable && loadState === 'loading' ? (desired || '') : unit.value;
 }
 
-function matches(video, state) {
+function matches(video, state, words) {
   if (state.semester && video.semester && state.semester !== video.semester) return false;
   if (state.month && !video.months.includes(state.month)) return false;
+  if (state.length && (video.duration <= 180 ? 'short' : video.duration <= 600 ? 'medium' : 'long') !== state.length) return false;
   const eligible = video.classes.some((item) => {
     if (!inClass(item, state)) return false;
     if (!state.semester) return true;
@@ -193,8 +250,21 @@ function matches(video, state) {
     return !units.length || units.some((entry) => !entry.term || entry.term === state.semester);
   });
   if (state.unit && !matchingUnits(video, state).some((entry) => unitLabel(entry) === state.unit)) return false;
-  const words = state.q.split(/\s+/).map(normalize).filter(Boolean);
   return eligible && words.every((word) => video.search.includes(word));
+}
+
+function matchingVideos(state, sort = false) {
+  const words = state.q.split(/\s+/).map(normalize).filter(Boolean);
+  const matching = videos.filter((video) => matches(video, state, words));
+  if (!sort) return matching;
+  if (state.order === 'short') return matching.sort((a, b) => a.duration - b.duration);
+  if (!words.length) return matching;
+  const phrase = words.join('');
+  const rank = (item) => 4 * Number(item.searchTitle.includes(phrase))
+    + 2 * Number(item.searchUnit.includes(phrase))
+    + words.filter((word) => item.searchTitle.includes(word)).length;
+  return matching.map((item) => ({ item, score: rank(item) }))
+    .sort((a, b) => b.score - a.score).map(({ item }) => item);
 }
 
 function stamp(seconds) {
@@ -224,6 +294,68 @@ function displayMonths(video) {
   return video.months.map((month) => month + '월').join('·');
 }
 
+function readPersonal() {
+  try {
+    const data = JSON.parse(localStorage.getItem(storageKey));
+    const ids = (value) => Array.isArray(value)
+      ? [...new Set(value.filter((id) => typeof id === 'string' && /^[\w-]{11}$/.test(id)))] : [];
+    return { favorites: ids(data?.favorites), recent: ids(data?.recent).slice(0, 24) };
+  } catch {
+    return { favorites: [], recent: [] };
+  }
+}
+
+function storePersonal() {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(personal));
+  } catch {
+    $('#shelf-controls p').textContent = '브라우저 저장을 사용할 수 없어 이 탭을 닫으면 목록이 지워집니다.';
+  }
+}
+
+function updateSaveButton(node, video) {
+  const saved = personal.favorites.includes(video.id);
+  node.textContent = saved ? '저장됨' : '저장';
+  node.setAttribute('aria-pressed', String(saved));
+  node.setAttribute('aria-label', video.title + (saved ? ' 즐겨찾기에서 제거' : ' 즐겨찾기에 저장'));
+}
+
+function bindSaveButton(node, video) {
+  node.dataset.saveId = video.id;
+  updateSaveButton(node, video);
+  node.addEventListener('click', () => {
+    const index = personal.favorites.indexOf(video.id);
+    if (index === -1) personal.favorites.unshift(video.id);
+    else personal.favorites.splice(index, 1);
+    storePersonal();
+    for (const control of document.querySelectorAll('[data-save-id="' + video.id + '"]')) {
+      updateSaveButton(control, video);
+    }
+    if (view === 'shelf' && shelf === 'favorites') {
+      if (detail.open) shelfNeedsRender = true;
+      else {
+        renderList();
+        libraryTitle.focus({ preventScroll: true });
+      }
+    }
+  });
+}
+
+function rememberRecent(id) {
+  if (personal.recent[0] === id) return;
+  personal.recent = [id, ...personal.recent.filter((item) => item !== id)].slice(0, 24);
+  storePersonal();
+  if (view === 'shelf' && shelf === 'recent') shelfNeedsRender = true;
+}
+
+function openFromCard(event, video, link, autoplay) {
+  if (event.button || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  event.preventDefault();
+  detailReturn = { link, x: window.scrollX, y: window.scrollY };
+  updateUrl((params) => params.set('video', video.id), 'pushState', { fromList: true });
+  syncDetail(autoplay);
+}
+
 function createCard(video, state) {
   const card = $('#card-template').content.firstElementChild.cloneNode(true);
   const title = card.querySelector('.card-title');
@@ -231,27 +363,108 @@ function createCard(video, state) {
   title.textContent = video.title;
   for (const link of [title, image]) {
     link.href = videoUrl(video.id);
-    link.addEventListener('click', (event) => {
-      if (event.button || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-      event.preventDefault();
-      detailTrigger = link;
-      updateUrl((params) => params.set('video', video.id), 'pushState', { fromList: true });
-      syncDetail();
-    });
+    link.addEventListener('click', (event) => openFromCard(event, video, link, link === image));
   }
-  image.setAttribute('aria-label', video.title + ' 영상 보기');
+  image.setAttribute('aria-label', video.title + ' 바로 재생');
   card.querySelector('.duration').textContent = stamp(video.duration);
   fillThumbnail(image.querySelector('img'), video.id);
-  card.querySelector('.badges').append(...displayClasses(video, state.grade).map((label) => element('span', label, 'badge')));
+  const badges = card.querySelector('.badges');
+  const classes = displayClasses(video, state.grade).filter((label) => label !== state.grade + '학년 ' + state.subject);
+  badges.append(...classes.map((label) => element('span', label, 'badge')));
+  badges.hidden = !classes.length;
   const units = [...new Set(matchingUnits(video, state).map(unitLabel))];
-  card.querySelector('.card-topic').textContent = [video.topic, displayMonths(video), ...(units.length ? units : [video.semester && video.semester + '학기'])].filter(Boolean).join(' · ');
-  card.querySelector('.card-tip').textContent = video.tip;
+  const topic = video.searchTitle.includes(normalize(video.topic || '')) ? '' : video.topic;
+  const context = card.querySelector('.card-topic');
+  context.textContent = [...(units.length ? units : [topic]), displayMonths(video)].filter(Boolean).join(' / ');
+  context.hidden = !context.textContent;
+  card.querySelector('.card-channel').textContent = video.channel;
+  bindSaveButton(card.querySelector('.save-video'), video);
   return card;
+}
+
+function withoutFilter(state, key) {
+  const next = { ...state, [key]: '' };
+  if (key === 'subject') next.month = '';
+  if (key === 'grade' || key === 'subject') next.unit = '';
+  return next;
+}
+
+function removeFilter(state, key) {
+  applyFilters(withoutFilter(state, key));
+  changeFilters();
+  (activeFilters.querySelector('button') || query).focus({ preventScroll: true });
+}
+
+function renderActiveFilters(state) {
+  const labels = { q: state.q, grade: state.grade && state.grade + '학년', subject: state.subject,
+    semester: state.semester && state.semester + '학기', month: state.month && state.month + '월',
+    unit: state.unit, length: lengthLabels[state.length] };
+  const chips = Object.entries(labels).filter(([, name]) => name).map(([key, name]) => {
+    const chip = button('', () => removeFilter(state, key), 'filter-chip');
+    const cross = element('span', '×');
+    cross.setAttribute('aria-hidden', 'true');
+    chip.append(element('span', name), cross);
+    chip.setAttribute('aria-label', name + ' ' + filterLabels[key] + ' 조건 지우기');
+    return chip;
+  });
+  if (chips.length > 1) chips.push(button('모두 지우기', clearFilters, 'clear-filters'));
+  activeFilters.hidden = !chips.length;
+  activeFilters.replaceChildren(...chips);
+}
+
+function renderEmpty(state) {
+  const notice = element('div', '', 'empty');
+  if (view === 'shelf') {
+    notice.append(element('p', shelf === 'favorites'
+      ? '영상의 저장 버튼을 누르면 여기에 모입니다.' : '재생한 영상이 여기에 표시됩니다.'),
+    button('수업 영상 찾기', () => { showView('browse'); query.focus(); }));
+  } else {
+    notice.append(element('p', videos.length ? '조건에 맞는 영상이 없습니다.' : '공개된 영상이 아직 없습니다.'));
+    const actions = element('div', '', 'empty-actions');
+    const activeCount = Object.keys(filterLabels).filter((key) => state[key]).length;
+    for (const key of ['unit', 'length', 'semester', 'month', 'q', 'subject', 'grade']) {
+      if (!state[key]) continue;
+      const relaxed = withoutFilter(state, key);
+      if (Object.keys(filterLabels).filter((field) => relaxed[field]).length !== activeCount - 1) continue;
+      const alternatives = matchingVideos(relaxed).length;
+      if (alternatives) actions.append(button(filterLabels[key] + ' 조건 풀기 (' + alternatives.toLocaleString('ko')
+        + '편)', () => removeFilter(state, key)));
+    }
+    if (!actions.childElementCount && videos.length) {
+      actions.append(button('검색어 바꾸기', () => { query.focus(); query.select(); }), button('조건 모두 지우기', clearFilters));
+    }
+    notice.append(actions);
+  }
+  results.replaceChildren(notice);
+}
+
+function showView(next) {
+  if (next !== view) {
+    view = next;
+    visible = pageSize;
+    renderList();
+  }
 }
 
 function renderList() {
   const state = getFilters();
-  reset.hidden = !Object.values(state).some(Boolean);
+  const browsing = view === 'browse';
+  filters.hidden = !browsing;
+  $('#list-actions').hidden = !browsing;
+  $('#share-list').hidden = !Object.values(state).some(Boolean);
+  $('#shelf-controls').hidden = browsing;
+  $('#browse').setAttribute('aria-pressed', String(browsing));
+  $('#video-shelf').setAttribute('aria-pressed', String(!browsing));
+  for (const control of document.querySelectorAll('[data-shelf]')) {
+    control.setAttribute('aria-pressed', String(control.dataset.shelf === shelf));
+  }
+  order.options[0].textContent = state.q ? '관련도 순' : '기본순';
+  if (browsing) renderActiveFilters(state);
+  else activeFilters.hidden = true;
+  libraryTitle.textContent = browsing ? (state.subject === occasionSubject
+    ? (state.month ? state.month + '월 계기교육' : occasionSubject)
+    : Object.keys(filterLabels).some((key) => state[key]) ? '검색 결과' : '전체 영상')
+    : shelf === 'favorites' ? '즐겨찾기' : '최근 재생';
   moreRow.hidden = true;
   if (loadState === 'loading') return;
   if (loadState === 'error') {
@@ -262,26 +475,14 @@ function renderList() {
     return;
   }
 
-  const matching = videos.filter((video) => matches(video, state));
+  const matching = browsing ? matchingVideos(state, true)
+    : personal[shelf].map((id) => videosById.get(id)).filter(Boolean);
   count.textContent = matching.length.toLocaleString('ko') + '개의 영상';
   if (!matching.length) {
-    const notice = element('div', '', 'empty');
-    const message = state.month ? state.month + '월에 조건에 맞는 계기교육 영상이 없습니다.'
-      : videos.length ? '조건에 맞는 영상이 없습니다.' : '공개된 영상이 아직 없습니다.';
-    notice.append(element('p', message));
-    if (state.month) {
-      notice.append(button('모든 월 보기', () => {
-        occasionMonth.value = '';
-        changeFilters();
-        occasionMonth.focus();
-      }));
-    } else if (!reset.hidden) {
-      notice.append(button('검색어와 필터 지우기', clearFilters));
-    }
-    results.replaceChildren(notice);
+    renderEmpty(state);
     return;
   }
-  results.replaceChildren(...matching.slice(0, visible).map((video) => createCard(video, state)));
+  results.replaceChildren(...matching.slice(0, visible).map((video) => createCard(video, browsing ? state : {})));
   moreRow.hidden = matching.length <= visible;
 }
 
@@ -300,7 +501,7 @@ function closeDetail() {
   }
 }
 
-function syncDetail() {
+function syncDetail(autoplay = false) {
   const id = new URLSearchParams(location.search).get('video');
   if (!id || loadState !== 'ready') {
     if (detail.open) {
@@ -308,15 +509,21 @@ function syncDetail() {
       detail.close();
       detailBody.replaceChildren();
       renderedVideo = undefined;
-      (detailTrigger?.isConnected ? detailTrigger : libraryTitle).focus();
-      detailTrigger = undefined;
+      if (shelfNeedsRender) renderList();
+      shelfNeedsRender = false;
+      const trigger = detailReturn?.link;
+      (trigger?.isConnected ? trigger : libraryTitle).focus({ preventScroll: true });
+      if (detailReturn && (scrollX !== detailReturn.x || scrollY !== detailReturn.y)) {
+        window.scrollTo(detailReturn.x, detailReturn.y);
+      }
+      detailReturn = undefined;
     }
     return;
   }
   if (detail.open && renderedVideo === id) return;
   stopPlayer();
   renderedVideo = id;
-  const video = videos.find((item) => item.id === id);
+  const video = videosById.get(id);
   const content = element('section', '', 'detail-content');
   const top = element('div', '', 'detail-top');
   const heading = element('h2', video?.title || '영상을 찾을 수 없습니다');
@@ -325,18 +532,20 @@ function syncDetail() {
   top.append(heading, close);
   content.append(top);
 
+  let start;
   if (!video) {
     content.append(element('p', '공개 목록에서 영상이 내려갔거나 주소가 바뀌었습니다.', 'detail-meta'));
     const actions = element('div', '', 'detail-actions');
     actions.append(button('영상 목록으로', closeDetail, 'primary'));
     content.append(actions);
   } else {
-    renderVideoDetail(content, video);
+    start = renderVideoDetail(content, video);
   }
 
   detailBody.replaceChildren(content);
   if (!detail.open) detail.showModal();
-  close.focus();
+  if (autoplay && start) start();
+  close.focus({ preventScroll: true });
 }
 
 function renderVideoDetail(content, video) {
@@ -372,8 +581,12 @@ function renderVideoDetail(content, video) {
   source.href = 'https://www.youtube.com/watch?v=' + video.id;
   source.target = '_blank';
   source.rel = 'noopener noreferrer';
-  actions.append(play, source, button('링크 복사', () => copyLink(videoUrl(video.id), content)));
+  const save = element('button', '', 'quiet save-video');
+  save.type = 'button';
+  bindSaveButton(save, video);
+  actions.append(play, source, button('영상 링크 복사', () => copyLink(videoUrl(video.id), content)), save);
   content.append(stage, message, tip, actions);
+  return () => playVideo(video, stage, message, play);
 }
 
 function loadPlayerApi() {
@@ -450,6 +663,12 @@ async function playVideo(video, stage, message, play) {
         onAutoplayBlocked: () => {
           if (connected()) notify('플레이어의 재생 버튼을 눌러 시작해 주세요.');
         },
+        onStateChange: ({ data }) => {
+          if (connected() && data === YT.PlayerState.PLAYING) {
+            message.hidden = true;
+            rememberRecent(video.id);
+          }
+        },
       },
     });
   } catch {
@@ -504,18 +723,20 @@ async function loadCatalog() {
     if (!response.ok) throw new Error('catalog not available');
     const catalog = await response.json();
     const records = await fetchLatestVideos(catalog);
-    videos = records.map((video) => ({
-      ...video,
-      months: occasionMonths(video),
-      units: lessonUnits(video),
-      search: normalize([video.title, video.topic, video.unit, ...video.tags,
-        ...video.classes.map(({ subject }) => subject)].filter(Boolean).join(' ')),
-    }));
+    videos = records.map((video) => {
+      const units = lessonUnits(video);
+      const searchTitle = normalize(video.title);
+      const searchUnit = normalize([video.unit, ...units.map(({ label }) => label)].filter(Boolean).join(' '));
+      return { ...video, months: occasionMonths(video), units, searchTitle, searchUnit,
+        search: [searchTitle, searchUnit, normalize([video.topic, video.channel, ...video.tags,
+          ...video.classes.map(({ subject }) => subject)].filter(Boolean).join(' '))].join(' ') };
+    });
+    videosById = new Map(videos.map((video) => [video.id, video]));
     loadState = 'ready';
   } catch {
     loadState = 'error';
   }
-  updateUnitFilter(new URLSearchParams(location.search).get('unit'));
+  updateUnitFilter(selectedUnit);
   renderList();
   syncDetail();
 }
@@ -525,32 +746,61 @@ renderOccasionMonths();
 restoreFilters(new URLSearchParams(location.search));
 search.addEventListener('submit', (event) => {
   event.preventDefault();
+  view = 'browse';
+  applyFilters(interpretSearch(query.value, getFilters()));
   changeFilters();
-  libraryTitle.focus();
-  libraryTitle.scrollIntoView({ block: 'start' });
+  if (results.getBoundingClientRect().top >= innerHeight) libraryTitle.scrollIntoView({ block: 'start' });
+  libraryTitle.focus({ preventScroll: true });
 });
-query.addEventListener('input', (event) => { if (!event.isComposing) changeFilters(); });
-query.addEventListener('compositionend', changeFilters);
+query.addEventListener('input', () => {
+  if (!query.value && searchText && view === 'browse') {
+    searchText = '';
+    changeFilters();
+  }
+});
 filters.addEventListener('submit', (event) => event.preventDefault());
 filters.addEventListener('change', (event) => {
-  if (event.target.name === 'grade') updateSubjectOptions(event.target.value, subject.value);
+  if (event.target.name === 'grade') {
+    updateSubjectOptions(event.target.value, subject.value);
+  }
   updateMonthFilter(occasionMonth.value);
-  if (event.target !== unit) updateUnitFilter(unit.value);
+  if (event.target === unit) selectedUnit = unit.value;
+  else if (event.target === subject || event.target.name === 'grade') updateUnitFilter('');
+  else if (event.target === semester) updateUnitFilter(selectedUnit);
   changeFilters();
 });
-reset.addEventListener('click', clearFilters);
+order.addEventListener('change', changeFilters);
+$('#browse').addEventListener('click', () => showView('browse'));
+$('#video-shelf').addEventListener('click', () => showView('shelf'));
+$('#shelf-controls').addEventListener('click', (event) => {
+  const next = event.target.closest('[data-shelf]')?.dataset.shelf;
+  if (!next || next === shelf) return;
+  shelf = next;
+  visible = pageSize;
+  renderList();
+});
+$('#current-occasion').addEventListener('click', (event) => {
+  if (event.button || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+  event.preventDefault();
+  view = 'browse';
+  applyFilters({ grade: getFilters().grade, subject: occasionSubject, month: currentMonth });
+  changeFilters();
+  libraryTitle.focus({ preventScroll: true });
+});
 $('#more').addEventListener('click', () => {
   const firstNew = visible;
   visible += pageSize;
   renderList();
   results.children[firstNew]?.querySelector('.card-title')?.focus();
 });
-$('.share-site').addEventListener('click', () => copyLink(pageUrl(), $('.hero-content')));
+$('.share-site').addEventListener('click', () => copyLink(pageUrl(), $('.hero')));
+$('#share-list').addEventListener('click', () => copyLink(listUrl(), $('#list-actions')));
 detail.addEventListener('cancel', (event) => { event.preventDefault(); closeDetail(); });
 window.addEventListener('popstate', () => {
   const before = getFilters();
-  restoreFilters(new URLSearchParams(location.search));
-  if (JSON.stringify(before) !== JSON.stringify(getFilters())) {
+  const params = new URLSearchParams(location.search);
+  if (Object.entries(before).some(([key, value]) => (params.get(key) || '') !== value)) {
+    restoreFilters(params);
     visible = pageSize;
     renderList();
   }

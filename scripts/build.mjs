@@ -21,10 +21,13 @@ const modules = new Map(await Promise.all(moduleNames.map(async (name) => [
   name, await readFile(new URL('../site/' + name, import.meta.url), 'utf8'),
 ])));
 const moduleVersion = createHash('sha256').update(JSON.stringify([...modules])).digest('hex').slice(0, 12);
+const style = await readFile(new URL('../site/style.css', import.meta.url));
+const styleVersion = createHash('sha256').update(style).digest('hex').slice(0, 12);
 for (const name of ['index.html', 'style.css', ...moduleNames]) {
-  let asset = modules.get(name) ?? await readFile(new URL('../site/' + name, import.meta.url));
+  let asset = name === 'style.css' ? style : modules.get(name) ?? await readFile(new URL('../site/' + name, import.meta.url));
   if (name === 'index.html') {
-    asset = asset.toString('utf8').replace('src="./app.js"', 'src="./app.js?v=' + moduleVersion + '"');
+    asset = asset.toString('utf8').replace('src="./app.js"', 'src="./app.js?v=' + moduleVersion + '"')
+      .replace('href="./style.css"', 'href="./style.css?v=' + styleVersion + '"');
   } else if (modules.has(name)) {
     asset = asset.replace(/(from '\.\/(?:curriculum|catalog)\.js)'/g, '$1?v=' + moduleVersion + "'");
   }
