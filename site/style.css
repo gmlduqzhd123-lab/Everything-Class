@@ -44,8 +44,8 @@ h1{font-size:clamp(24px,4vw,34px);letter-spacing:-.06em;line-height:1.24;font-we
 h2{font-size:25px;letter-spacing:-.055em;line-height:1.28}
 #library-title{scroll-margin-top:12px}
 .results-heading p,.shelf-controls p{color:var(--muted);font-size:13px}
-.filters{display:grid;grid-template-columns:auto minmax(126px,1fr) auto minmax(148px,1.65fr) auto;align-items:end;gap:9px 12px;background:var(--surface);border:1px solid var(--line);padding:11px 14px 13px;border-radius:12px}
-.filters:has(#occasion-month-field:not([hidden])){grid-template-columns:auto minmax(126px,1fr) auto auto auto}
+.filters{display:grid;grid-template-columns:auto minmax(126px,1fr) minmax(104px,auto) minmax(148px,1.65fr) minmax(137px,auto);align-items:end;gap:9px 12px;background:var(--surface);border:1px solid var(--line);padding:11px 14px 13px;border-radius:12px}
+.filters:has(#occasion-month-field:not([hidden])){grid-template-columns:auto minmax(126px,1fr) minmax(120px,auto) minmax(104px,auto) minmax(137px,auto)}
 .grade-field{border:0;padding:0;margin:0;min-width:0}
 .grade-field legend,.select-field label{font-size:12px;color:var(--muted);font-weight:800;margin:0 0 6px;padding:0;display:block}
 .grades{display:flex;gap:6px;flex-wrap:wrap}
@@ -143,4 +143,4 @@ body:has(dialog[open]){overflow:hidden}
 .header-actions{display:flex;align-items:center;gap:6px}.ys-chip{white-space:nowrap;gap:3px}.ys-credit a{color:inherit;text-decoration:underline}
 @media(max-width:560px){.ys-wide{display:none}.header-actions .quiet{padding:6px 10px}.share-site{font-size:0;gap:0}.share-site span{font-size:16px}.brand{white-space:nowrap}}
 @media(max-width:400px){.brand{font-size:15px;gap:6px}.header-actions{gap:4px}.header-actions .quiet{padding:6px 7px}}
-@media(max-width:350px){.brand{font-size:14px}.brand-icon{width:23px;height:23px}.header-actions .quiet{padding-inline:5px}}
+@media(max-width:350px){.brand{font-size:14px}.brand-icon{width:23px;height:23px}.header-actions .quiet{padding-inline:5px}.select-field select{padding-inline:5px;font-size:12px}}
