@@ -1,6 +1,12 @@
 import { curriculum, occasionSubject } from './curriculum.js';
 
 const maxCatalogBytes = 4_000_000;
+export const lessonStageNames = ['도입', '개념 설명', '활동', '정리'];
+
+export function lessonStages(video) {
+  const tags = new Set(video.tags.map((tag) => tag.normalize('NFKC').replace(/\s+/g, '')));
+  return lessonStageNames.filter((name) => tags.has('단계:' + name.replace(/\s+/g, '')));
+}
 
 const headers = [
   '유튜브 링크', '표시 제목', '채널명', '영상 길이(초)', '학년·교과',

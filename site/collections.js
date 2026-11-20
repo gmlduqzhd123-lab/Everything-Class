@@ -1,0 +1,34 @@
+export const collectionVideoLimit = 12;
+
+export function cleanVideoIds(ids) {
+  return Array.isArray(ids)
+    ? [...new Set(ids.filter((id) => typeof id === 'string' && /^[\w-]{11}$/.test(id)))]
+    : [];
+}
+
+export function readCollections(data) {
+  if (!Array.isArray(data)) return [];
+  const ids = new Set();
+  return data.flatMap((item) => {
+    if (!item || typeof item.id !== 'string' || !/^[\w-]{1,60}$/.test(item.id) || ids.has(item.id)) return [];
+    if (typeof item.name !== 'string' || !item.name.trim()) return [];
+    ids.add(item.id);
+    return [{ id: item.id, name: item.name.trim().slice(0, 50), videos: cleanVideoIds(item.videos).slice(0, collectionVideoLimit) }];
+  });
+}
+
+export function readSharedCollection(params) {
+  const value = params.get('bundle');
+  if (!value || value.length > collectionVideoLimit * 12) return null;
+  const videos = cleanVideoIds(value.split('.'));
+  if (!videos.length || videos.length > collectionVideoLimit) return null;
+  return { name: (params.get('name') || '').trim().slice(0, 50) || '공유받은 수업 꾸러미', videos };
+}
+
+export function moveCollectionVideo(ids, index, offset) {
+  const nextIndex = index + offset;
+  if (index < 0 || index >= ids.length || nextIndex < 0 || nextIndex >= ids.length) return ids;
+  const next = ids.slice();
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  return next;
+}
