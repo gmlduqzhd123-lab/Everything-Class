@@ -44,7 +44,7 @@ h1{font-size:clamp(24px,4vw,34px);letter-spacing:-.06em;line-height:1.24;font-we
 h2{font-size:25px;letter-spacing:-.055em;line-height:1.28}
 #library-title{scroll-margin-top:12px}
 .results-heading p,.shelf-controls p{color:var(--muted);font-size:13px}
-.filters{display:grid;grid-template-columns:minmax(126px,1fr) minmax(104px,auto) minmax(148px,1.65fr) minmax(137px,auto) minmax(112px,auto);align-items:end;gap:9px 12px;background:var(--surface);border:1px solid var(--line);padding:11px 14px 13px;border-radius:12px}
+.filters{display:grid;grid-template-columns:minmax(126px,1fr) minmax(104px,auto) minmax(148px,1.65fr) minmax(137px,auto) repeat(2,minmax(112px,auto));align-items:end;gap:9px 12px;background:var(--surface);border:1px solid var(--line);padding:11px 14px 13px;border-radius:12px}
 .grade-field{grid-column:1/-1}
 .grade-field{border:0;padding:0;margin:0;min-width:0}
 .grade-field legend,.select-field label{font-size:12px;color:var(--muted);font-weight:800;margin:0 0 6px;padding:0;display:block}
@@ -81,6 +81,7 @@ h2{font-size:25px;letter-spacing:-.055em;line-height:1.28}
 .badge{background:#efedff;color:#4e3ca8;border-radius:6px;padding:2px 7px;font-weight:800;font-size:11px}
 .badge:nth-child(2n){background:#e9f2fd;color:#2d5684}
 .badge.stage-badge{background:#def7ee;color:#165745}
+.badge.type-badge{background:#e9f2fd;color:#244e78}
 .card h3{font-size:18px;letter-spacing:-.04em;line-height:1.42}
 .card-title{text-decoration:none;overflow-wrap:anywhere}
 .card-title:hover{text-decoration:underline;text-underline-offset:3px}
@@ -144,7 +145,7 @@ body:has(dialog[open]){overflow:hidden}
 .coverage-list li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:8px}
 .coverage-meta{font-size:12px;color:var(--muted)}
 .coverage-list button{flex:none;padding-inline:9px}
-@media(max-width:960px){.filters,.filters:has(#occasion-month-field:not([hidden])){grid-template-columns:repeat(4,minmax(0,1fr))}.grade-field{grid-column:1/-1}}
+@media(max-width:960px){.filters{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:780px){.wrap{width:calc(100% - 38px)}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){
   .wrap{width:calc(100% - 24px)}
@@ -158,7 +159,7 @@ body:has(dialog[open]){overflow:hidden}
   .search input{font-size:16px}
   .search button{padding-inline:12px;font-size:14px}
   .library{margin-top:10px}
-  .filters,.filters:has(#occasion-month-field:not([hidden])){grid-template-columns:repeat(2,minmax(0,1fr));padding:9px;gap:8px}
+  .filters{grid-template-columns:repeat(2,minmax(0,1fr));padding:9px;gap:8px}
   .grades{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
   .grades span{font-size:12px;padding-inline:1px}
   .results-toolbar{margin-top:10px}

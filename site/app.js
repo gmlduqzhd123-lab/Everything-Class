@@ -1,6 +1,6 @@
 import { grades, curriculum, integrated, occasionSubject, subjectOptions } from './curriculum.js';
 import { isCatalogResponseUrl, lessonStageNames, lessonStages, lessonUnits, occasionMonths, parseCatalog,
-  publishedCatalogRequestUrl, readCatalogCsv } from './catalog.js';
+  publishedCatalogRequestUrl, readCatalogCsv, videoTypeNames, videoTypes } from './catalog.js';
 import { cleanVideoIds, collectionVideoLimit, moveCollectionVideo, readCollections, readSharedCollection } from './collections.js';
 import { alternativeVideos, unitCoverage } from './lesson-tools.js';
 
@@ -14,6 +14,7 @@ const occasionMonth = $('#occasion-month');
 const unit = $('#unit');
 const length = $('#length');
 const lessonStage = $('#lesson-stage');
+const videoType = $('#video-type');
 const order = $('#order');
 const activeFilters = $('#active-filters');
 const results = $('#results');
@@ -31,7 +32,7 @@ const opsMatch = /^#ops=(\d{1,7}),(\d{1,7})$/.exec(location.hash);
 const managementCounts = opsMatch ? opsMatch.slice(1).map(Number) : null;
 const lengthLabels = { short: '3분 이하', medium: '3분 초과~10분', long: '10분 초과' };
 const filterLabels = { q: '검색어', grade: '학년', subject: '교과·활동', semester: '학기',
-  month: '활용 월', unit: '단원', length: '영상 길이', stage: '수업 단계' };
+  month: '활용 월', unit: '단원', length: '영상 길이', stage: '수업 단계', type: '영상 유형' };
 const subjectPattern = [...subjectOptions].sort((a, b) => b.length - a.length)
   .map((name) => name.replace(/ /g, '\\s*')).join('|');
 const searchFacets = new RegExp('(^|[\\s,])(?:([1-6])\\s*학년|([12])\\s*학기|('
@@ -155,7 +156,8 @@ function renderGrades() {
 
 function getFilters() {
   return { q: searchText, grade: filters.elements.grade.value, subject: subject.value,
-    semester: semester.value, month: occasionMonth.value, unit: selectedUnit, length: length.value, stage: lessonStage.value, order: order.value };
+    semester: semester.value, month: occasionMonth.value, unit: selectedUnit, length: length.value,
+    stage: lessonStage.value, type: videoType.value, order: order.value };
 }
 
 function restoreFilters(params) {
@@ -171,6 +173,7 @@ function applyFilters(state) {
   semester.value = ['1', '2'].includes(state.semester) ? state.semester : '';
   length.value = Object.hasOwn(lengthLabels, state.length) ? state.length : '';
   lessonStage.value = lessonStageNames.includes(state.stage) ? state.stage : '';
+  videoType.value = videoTypeNames.includes(state.type) ? state.type : '';
   order.value = state.order === 'short' ? 'short' : '';
   updateMonthFilter(state.month);
   updateUnitFilter(state.unit);
@@ -259,6 +262,7 @@ function matches(video, state, words) {
   if (state.semester && video.semester && state.semester !== video.semester) return false;
   if (state.month && !video.months.includes(state.month)) return false;
   if (state.stage && !video.stages.includes(state.stage)) return false;
+  if (state.type && !video.types.includes(state.type)) return false;
   if (state.length && (video.duration <= 180 ? 'short' : video.duration <= 600 ? 'medium' : 'long') !== state.length) return false;
   const eligible = video.classes.some((item) => {
     if (!inClass(item, state)) return false;
@@ -542,7 +546,8 @@ function createCard(video, state) {
   const badges = card.querySelector('.badges');
   const classes = displayClasses(video, state.grade).filter((label) => label !== state.grade + '학년 ' + state.subject);
   badges.append(...classes.map((label) => element('span', label, 'badge')),
-    ...video.stages.map((label) => element('span', label, 'badge stage-badge')));
+    ...video.stages.map((label) => element('span', label, 'badge stage-badge')),
+    ...video.types.map((label) => element('span', label, 'badge type-badge')));
   badges.hidden = !badges.childElementCount;
   const units = [...new Set(matchingUnits(video, state).map(unitLabel))];
   const topic = video.searchTitle.includes(normalize(video.topic || '')) ? '' : video.topic;
@@ -573,7 +578,7 @@ function removeFilter(state, key) {
 function renderActiveFilters(state) {
   const labels = { q: state.q, grade: state.grade && state.grade + '학년', subject: state.subject,
     semester: state.semester && state.semester + '학기', month: state.month && state.month + '월',
-    unit: state.unit, length: lengthLabels[state.length], stage: state.stage };
+    unit: state.unit, length: lengthLabels[state.length], stage: state.stage, type: state.type };
   const chips = Object.entries(labels).filter(([, name]) => name).map(([key, name]) => {
     const chip = button('', () => removeFilter(state, key), 'filter-chip');
     const cross = element('span', '×');
@@ -597,7 +602,7 @@ function renderEmpty(state) {
     notice.append(element('p', videos.length ? '조건에 맞는 영상이 없습니다.' : '공개된 영상이 아직 없습니다.'));
     const actions = element('div', '', 'empty-actions');
     const activeCount = Object.keys(filterLabels).filter((key) => state[key]).length;
-    for (const key of ['unit', 'stage', 'length', 'semester', 'month', 'q', 'subject', 'grade']) {
+    for (const key of ['unit', 'type', 'stage', 'length', 'semester', 'month', 'q', 'subject', 'grade']) {
       if (!state[key]) continue;
       const relaxed = withoutFilter(state, key);
       if (Object.keys(filterLabels).filter((field) => relaxed[field]).length !== activeCount - 1) continue;
@@ -733,6 +738,7 @@ function renderVideoDetail(content, video) {
   const badges = element('div', '', 'badges');
   badges.append(...displayClasses(video).map((label) => element('span', label, 'badge')));
   badges.append(...video.stages.map((label) => element('span', label, 'badge stage-badge')));
+  badges.append(...video.types.map((label) => element('span', label, 'badge type-badge')));
   content.append(badges, element('p', [video.channel, stamp(video.duration), video.topic, displayMonths(video)].filter(Boolean).join(' · '), 'detail-meta'));
   if (video.units.length) {
     const entries = video.units.map((entry) => entry.grade + '학년 ' + entry.subject + ' · ' + unitLabel(entry));
@@ -1112,7 +1118,8 @@ async function loadCatalog() {
       const units = lessonUnits(video);
       const searchTitle = normalize(video.title);
       const searchUnit = normalize([video.unit, ...units.map(({ label }) => label)].filter(Boolean).join(' '));
-      return { ...video, months: occasionMonths(video), stages: lessonStages(video), units, searchTitle, searchUnit,
+      return { ...video, months: occasionMonths(video), stages: lessonStages(video), types: videoTypes(video),
+        units, searchTitle, searchUnit,
         search: [searchTitle, searchUnit, normalize([video.topic, video.channel, ...video.tags,
           ...video.classes.map(({ subject }) => subject)].filter(Boolean).join(' '))].join(' ') };
     });
@@ -1132,6 +1139,7 @@ async function loadCatalog() {
 renderGrades();
 renderOccasionMonths();
 lessonStage.append(...lessonStageNames.map((stage) => new Option(stage, stage)));
+videoType.append(...videoTypeNames.map((type) => new Option(type, type)));
 restoreFilters(new URLSearchParams(location.search));
 search.addEventListener('submit', (event) => {
   event.preventDefault();

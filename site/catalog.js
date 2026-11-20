@@ -2,10 +2,19 @@ import { curriculum, occasionSubject } from './curriculum.js';
 
 const maxCatalogBytes = 4_000_000;
 export const lessonStageNames = ['도입', '개념 설명', '활동', '정리'];
+export const videoTypeNames = ['설명형', '실험·시범', '애니메이션', '현장·사례', '동요·율동', '문제 풀이'];
+
+function taggedCategories(video, prefix, names) {
+  const tags = new Set(video.tags.map((tag) => tag.normalize('NFKC').replace(/\s+/g, '')));
+  return names.filter((name) => tags.has(prefix + name.replace(/\s+/g, '')));
+}
 
 export function lessonStages(video) {
-  const tags = new Set(video.tags.map((tag) => tag.normalize('NFKC').replace(/\s+/g, '')));
-  return lessonStageNames.filter((name) => tags.has('단계:' + name.replace(/\s+/g, '')));
+  return taggedCategories(video, '단계:', lessonStageNames);
+}
+
+export function videoTypes(video) {
+  return taggedCategories(video, '유형:', videoTypeNames);
 }
 
 const headers = [
