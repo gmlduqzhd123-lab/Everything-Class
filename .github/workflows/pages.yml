@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.revision.outputs.changed }}
+      revision: ${{ steps.revision.outputs.revision }}
+      catalog_hash: ${{ steps.revision.outputs.catalog_hash }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -43,6 +45,8 @@ jobs:
         env:
           PUBLIC_REVISION_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/revision.txt
         run: |
+          printf 'revision=%s\n' "$(cat dist/revision.txt)" >> "$GITHUB_OUTPUT"
+          printf 'catalog_hash=%s\n' "$(sha256sum dist/videos.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
           if curl --silent --fail --max-time 10 --max-filesize 512 \
               --header 'Cache-Control: no-cache' \
               "$PUBLIC_REVISION_URL?check=$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
@@ -72,3 +76,22 @@ jobs:
       - name: Publish to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify the deployed catalog and revision
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_REVISION: ${{ needs.validate.outputs.revision }}
+          EXPECTED_CATALOG_HASH: ${{ needs.validate.outputs.catalog_hash }}
+        run: |
+          for attempt in {1..8}; do
+            stamp="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$attempt"
+            base="${SITE_URL%/}"
+            if curl -fsS --max-time 8 --max-filesize 512 "$base/revision.txt?verify=$stamp" -o "$RUNNER_TEMP/revision.txt" \
+                && [ "$(cat "$RUNNER_TEMP/revision.txt")" = "$EXPECTED_REVISION" ] \
+                && curl -fsS --max-time 15 "$base/videos.json?verify=$stamp" -o "$RUNNER_TEMP/deployed-videos.json" \
+                && [ "$(sha256sum "$RUNNER_TEMP/deployed-videos.json" | cut -d ' ' -f 1)" = "$EXPECTED_CATALOG_HASH" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "GitHub Pages did not return the expected revision and video catalog." >&2
+          exit 1

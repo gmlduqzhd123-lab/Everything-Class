@@ -2,7 +2,7 @@ import { grades, curriculum, integrated, occasionSubject, subjectOptions } from 
 import { isCatalogResponseUrl, lessonStageNames, lessonStages, lessonUnits, occasionMonths, parseCatalog,
   publishedCatalogRequestUrl, readCatalogCsv, videoTypeNames, videoTypes } from './catalog.js';
 import { cleanVideoIds, collectionVideoLimit, moveCollectionVideo, readCollections, readSharedCollection } from './collections.js';
-import { alternativeVideos, unitCoverage } from './lesson-tools.js';
+import { alternativeVideos, catalogClassification, compareClassifications, unitCoverage } from './lesson-tools.js';
 
 const $ = (selector) => document.querySelector(selector);
 const search = $('.search');
@@ -968,7 +968,8 @@ function renderCatalogStatus() {
   const format = (value) => Number.isInteger(value) ? value.toLocaleString('ko') + '편' : '확인할 수 없음';
   const date = (value) => value ? new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'medium',
     timeStyle: 'short' }).format(value) : '확인할 수 없음';
-  const { publicCount, backupCount, backupTime, checkedAt, online, current } = catalogState;
+  const { publicCount, backupCount, backupTime, checkedAt, online, current, classification,
+    publicTypes, backupTypes, publicStages, backupStages } = catalogState;
   const lines = [['구글 시트 공개 목록', format(publicCount)], ['GitHub Pages 예비 목록', format(backupCount)],
     ['예비 목록 게시 시각', date(backupTime)], ['마지막 확인 시각', date(checkedAt)]];
   if (managementCounts) {
@@ -976,12 +977,26 @@ function renderCatalogStatus() {
     lines.unshift(['관리 시트 전체·공개 승인', format(managed) + ' · ' + format(approved)]);
     if (online) lines.splice(2, 0, ['공개 승인과 웹 목록', approved === publicCount ? '건수 일치' : '갱신 대기']);
   }
+  if (loadState === 'ready') {
+    const pair = (a, b) => format(a) + ' / ' + format(b);
+    lines.push(['영상 유형 등록 (공개 / 예비)', pair(publicTypes, backupTypes)],
+      ['수업 단계 등록 (공개 / 예비)', pair(publicStages, backupStages)]);
+  }
+  if (classification) {
+    lines.push(['유형이 다른 영상', format(classification.typeDifferences)],
+      ['단계가 다른 영상', format(classification.stageDifferences)]);
+    if (classification.publishedOnly || classification.backupOnly) {
+      lines.push(['한 목록에만 있음 (공개 / 예비)', format(classification.publishedOnly) + ' / ' + format(classification.backupOnly)]);
+    }
+  }
   output.replaceChildren(...lines.flatMap(([label, value]) => [element('dt', label), element('dd', value)]));
   $('#status-summary').textContent = loadState === 'loading' ? '목록을 확인하는 중입니다.'
     : loadState === 'error' ? '영상 목록을 불러오지 못했습니다.'
     : online === false ? '공개 목록 연결이 지연되어 예비 목록을 표시합니다.'
     : online === undefined ? '배포된 예비 목록을 표시합니다.'
-    : current ? '공개 목록과 예비 목록이 일치합니다.' : '공개 목록을 표시합니다. 예비 목록은 다음 배포 때 갱신됩니다.';
+    : current ? '공개 목록과 예비 목록이 일치합니다.'
+    : classification?.differences ? '공개 목록을 표시합니다. 예비 목록의 영상 유형 또는 수업 단계가 다릅니다.'
+    : '공개 목록을 표시합니다. 예비 목록은 다음 배포 때 갱신됩니다.';
   $('#refresh-status').disabled = loadState === 'loading';
 }
 
@@ -1111,8 +1126,14 @@ async function loadCatalog() {
     const catalog = await response.json();
     const { records, online } = await fetchLatestVideos(catalog);
     const backupDate = new Date(response.headers.get('last-modified') || 'unavailable');
+    const backupClasses = catalogClassification(catalog.videos);
+    const publishedClasses = online ? catalogClassification(records) : null;
+    const classified = (entries, kind) => entries?.filter((entry) => entry[kind]).length;
     catalogState = { backupCount: catalog.videos.length, backupTime: Number.isNaN(+backupDate) ? null : backupDate,
       publicCount: online ? records.length : undefined, online, checkedAt: new Date(),
+      publicTypes: classified(publishedClasses, 'types'), backupTypes: classified(backupClasses, 'types'),
+      publicStages: classified(publishedClasses, 'stages'), backupStages: classified(backupClasses, 'stages'),
+      classification: publishedClasses && compareClassifications(publishedClasses, backupClasses),
       current: online && records.length === catalog.videos.length && JSON.stringify(records) === JSON.stringify(catalog.videos) };
     videos = records.map((video) => {
       const units = lessonUnits(video);

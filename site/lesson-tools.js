@@ -1,3 +1,31 @@
+import { lessonStages, videoTypes } from './catalog.js';
+
+export function catalogClassification(records) {
+  return records.map((video) => ({ id: video.id, types: videoTypes(video).join('|'), stages: lessonStages(video).join('|') }));
+}
+
+export function compareClassifications(published, backup) {
+  const ready = new Map(backup.map((entry) => [entry.id, entry]));
+  let differences = 0;
+  let typeDifferences = 0;
+  let stageDifferences = 0;
+  let publishedOnly = 0;
+  for (const entry of published) {
+    const old = ready.get(entry.id);
+    if (!old) {
+      publishedOnly++;
+      continue;
+    }
+    ready.delete(entry.id);
+    const typeChanged = entry.types !== old.types;
+    const stageChanged = entry.stages !== old.stages;
+    if (typeChanged) typeDifferences++;
+    if (stageChanged) stageDifferences++;
+    if (typeChanged || stageChanged) differences++;
+  }
+  return { differences, typeDifferences, stageDifferences, publishedOnly, backupOnly: ready.size };
+}
+
 export function unitKey({ grade, subject, term, label }) {
   return [grade, subject, term, label.normalize('NFKC').toLocaleLowerCase('ko').replace(/[^\p{L}\p{N}]/gu, '')].join('|');
 }
