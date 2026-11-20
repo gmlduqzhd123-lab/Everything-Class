@@ -253,14 +253,26 @@ function matchingUnits(video, state) {
 function updateUnitFilter(desired) {
   const state = getFilters();
   const applicable = Boolean(state.grade && state.subject && state.subject !== occasionSubject);
-  const labels = applicable ? [...new Set(videos.flatMap((video) => matchingUnits(video, state).map(unitLabel)))] : [];
-  labels.sort((left, right) => left.localeCompare(right, 'ko', { numeric: true }));
-  const placeholder = !applicable ? '학년·교과를 선택하세요'
-    : loadState === 'loading' ? '단원을 불러오는 중' : labels.length ? '전체 단원' : '선택할 단원 없음';
-  unit.replaceChildren(new Option(placeholder, ''), ...labels.map((label) => new Option(label, label)));
-  $('#unit-field').hidden = state.subject === occasionSubject;
-  unit.disabled = !labels.length;
-  unit.value = labels.includes(desired) ? desired : '';
+  const terms = new Map([['1', new Set()], ['2', new Set()], ['', new Set()]]);
+  if (applicable) {
+    for (const video of videos) {
+      for (const { term, label } of matchingUnits(video, state)) terms.get(term).add(label);
+    }
+  }
+  const groups = [];
+  for (const [term, labels] of terms) {
+    if (!labels.size) continue;
+    const group = element('optgroup');
+    group.label = term ? term + '학기' : '학기 공통';
+    const sorted = [...labels].sort((left, right) => left.localeCompare(right, 'ko', { numeric: true }));
+    group.append(...sorted.map((label) => new Option(label, unitLabel({ term, label }))));
+    groups.push(group);
+  }
+  const placeholder = loadState === 'loading' ? '단원을 불러오는 중' : groups.length ? '전체 단원' : '선택할 단원 없음';
+  unit.replaceChildren(new Option(placeholder, ''), ...groups);
+  $('#unit-field').hidden = !applicable;
+  unit.disabled = !groups.length;
+  unit.value = [...unit.options].some((option) => option.value === desired) ? desired : '';
   selectedUnit = applicable && loadState === 'loading' ? (desired || '') : unit.value;
 }
 
@@ -692,8 +704,15 @@ function renderUnitRecommendations(matching, state) {
       const link = element('a', video.title, 'card-title');
       link.href = videoUrl(video.id);
       link.addEventListener('click', (event) => openFromCard(event, video, link, false));
+      const play = button('재생', (event) => openFromCard(event, video, play, true), 'primary');
+      play.setAttribute('aria-label', video.title + ' 재생');
+      const add = button('꾸러미에 넣기', () => openCollectionPicker(video));
+      add.setAttribute('aria-label', video.title + ' 꾸러미에 넣기');
+      const actions = element('div', '', 'recommendation-actions');
+      actions.append(play, add);
       item.append(element('span', stage, 'badge stage-badge'), link,
-        element('span', [...video.types, stamp(video.duration)].join(' · '), 'recommendation-meta'));
+        element('span', [...video.types, stamp(video.duration)].join(' · '), 'recommendation-meta'),
+        element('p', video.tip.split(/\r?\n/, 1)[0], 'recommendation-tip'), actions);
       items.push(item);
     }
   }

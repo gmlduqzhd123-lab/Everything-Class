@@ -44,7 +44,7 @@ h1{font-size:clamp(24px,4vw,34px);letter-spacing:-.06em;line-height:1.24;font-we
 h2{font-size:25px;letter-spacing:-.055em;line-height:1.28}
 #library-title{scroll-margin-top:12px}
 .results-heading p,.shelf-controls p{color:var(--muted);font-size:13px}
-.filters{display:grid;grid-template-columns:minmax(126px,1fr) minmax(104px,auto) minmax(148px,1.65fr) minmax(137px,auto) repeat(2,minmax(112px,auto));align-items:end;gap:9px 12px;background:var(--surface);border:1px solid var(--line);padding:11px 14px 13px;border-radius:12px}
+.filters{display:grid;grid-template-columns:minmax(126px,1fr) minmax(148px,1.65fr) minmax(104px,auto) minmax(137px,auto) repeat(2,minmax(112px,auto));align-items:end;gap:9px 12px;background:var(--surface);border:1px solid var(--line);padding:11px 14px 13px;border-radius:12px}
 .grade-field{grid-column:1/-1}
 .grade-field{border:0;padding:0;margin:0;min-width:0}
 .grade-field legend,.select-field label{font-size:12px;color:var(--muted);font-weight:800;margin:0 0 6px;padding:0;display:block}
@@ -70,6 +70,9 @@ h2{font-size:25px;letter-spacing:-.055em;line-height:1.28}
 .unit-recommendations li{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:3px 8px;padding:8px;border-radius:7px;background:#f6f3ff}
 .unit-recommendations li a{font-size:14px;overflow-wrap:anywhere;line-height:1.5}
 .recommendation-meta{grid-column:2;font-size:12px;color:var(--muted)}
+.recommendation-tip,.recommendation-actions{grid-column:1/-1;margin-top:4px}
+.recommendation-tip{font-size:13px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
+.recommendation-actions{display:flex;flex-wrap:wrap;gap:6px}
 .filter-chip,.clear-filters{min-height:34px;border:1px solid #dfd7fa;border-radius:7px;padding:3px 9px;background:#f2eeff;color:#443192;font-size:12px;font-weight:700}
 .filter-chip{display:inline-flex;gap:8px;align-items:center;max-width:100%;text-align:left;overflow-wrap:anywhere}
 .filter-chip span[aria-hidden]{font-size:17px}
@@ -179,8 +182,9 @@ body:has(dialog[open]){overflow:hidden}
   .library{margin-top:10px}
   .filters{grid-template-columns:repeat(2,minmax(0,1fr));padding:9px;gap:8px}
   #toggle-advanced{display:block;min-height:44px;align-self:end;justify-self:stretch}
-  .filters:has(#occasion-month-field:not([hidden])) #toggle-advanced{grid-column:1/-1}
+  .filters:has(:is(#occasion-month-field,#unit-field):not([hidden])) #toggle-advanced{grid-column:1/-1}
   .unit-recommendations ul{grid-template-columns:1fr}
+  .recommendation-actions button{min-height:44px}
   .classroom-mode .detail-top{flex-wrap:wrap}
   .classroom-mode .player-stage{min-height:unset}
   .grades{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
