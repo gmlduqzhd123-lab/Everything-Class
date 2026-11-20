@@ -1,5 +1,7 @@
 import { curriculum, occasionSubject } from './curriculum.js';
 
+const maxCatalogBytes = 4_000_000;
+
 const headers = [
   '유튜브 링크', '표시 제목', '채널명', '영상 길이(초)', '학년·교과',
   '수업 주제', '수업 활용 팁', '마지막 확인일', '학기', '단원',
@@ -206,7 +208,7 @@ export async function readCatalogCsv(response) {
     throw new Error('공개목록 CSV를 받지 못했습니다. 웹 게시 상태와 CSV 형식을 확인하세요.');
   }
   const csv = await response.text();
-  if (!csv.trim() || new TextEncoder().encode(csv).byteLength > 2_000_000) {
+  if (!csv.trim() || new TextEncoder().encode(csv).byteLength > maxCatalogBytes) {
     throw new Error('공개목록 CSV 파일이 비어 있거나 크기 제한을 초과했습니다.');
   }
   return csv;
