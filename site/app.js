@@ -27,6 +27,8 @@ const pageSize = 12;
 const storageKey = 'everything-class-personal-v1';
 const reportForm = 'https://docs.google.com/forms/d/e/1FAIpQLSdeZclUf1FV89rzR_OWGSq9zlNqvpNO8ICBQNZ5TrgkiyeB7A/viewform';
 const unavailableVideos = new Set();
+const opsMatch = /^#ops=(\d{1,7}),(\d{1,7})$/.exec(location.hash);
+const managementCounts = opsMatch ? opsMatch.slice(1).map(Number) : null;
 const lengthLabels = { short: '3분 이하', medium: '3분 초과~10분', long: '10분 초과' };
 const filterLabels = { q: '검색어', grade: '학년', subject: '교과·활동', semester: '학기',
   month: '활용 월', unit: '단원', length: '영상 길이', stage: '수업 단계' };
@@ -963,6 +965,11 @@ function renderCatalogStatus() {
   const { publicCount, backupCount, backupTime, checkedAt, online, current } = catalogState;
   const lines = [['구글 시트 공개 목록', format(publicCount)], ['GitHub Pages 예비 목록', format(backupCount)],
     ['예비 목록 게시 시각', date(backupTime)], ['마지막 확인 시각', date(checkedAt)]];
+  if (managementCounts) {
+    const [managed, approved] = managementCounts;
+    lines.unshift(['관리 시트 전체·공개 승인', format(managed) + ' · ' + format(approved)]);
+    if (online) lines.splice(2, 0, ['공개 승인과 웹 목록', approved === publicCount ? '건수 일치' : '갱신 대기']);
+  }
   output.replaceChildren(...lines.flatMap(([label, value]) => [element('dt', label), element('dd', value)]));
   $('#status-summary').textContent = loadState === 'loading' ? '목록을 확인하는 중입니다.'
     : loadState === 'error' ? '영상 목록을 불러오지 못했습니다.'
@@ -1181,6 +1188,7 @@ $('#more').addEventListener('click', () => {
 $('.share-site').addEventListener('click', () => copyLink(pageUrl(), $('.hero')));
 $('#share-list').addEventListener('click', () => copyLink(listUrl(), $('#list-actions')));
 $('#show-status').addEventListener('click', () => $('#catalog-status').showModal());
+if (managementCounts) $('#catalog-status').showModal();
 $('#refresh-status').addEventListener('click', loadCatalog);
 $('#show-coverage').addEventListener('click', openCoverage);
 $('#coverage-filters').addEventListener('change', renderCoverage);
