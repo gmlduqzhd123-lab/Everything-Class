@@ -693,7 +693,7 @@ function renderUnitRecommendations(matching, state) {
       link.href = videoUrl(video.id);
       link.addEventListener('click', (event) => openFromCard(event, video, link, false));
       item.append(element('span', stage, 'badge stage-badge'), link,
-        element('span', stamp(video.duration), 'recommendation-duration'));
+        element('span', [...video.types, stamp(video.duration)].join(' · '), 'recommendation-meta'));
       items.push(item);
     }
   }

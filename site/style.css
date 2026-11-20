@@ -67,10 +67,9 @@ h2{font-size:25px;letter-spacing:-.055em;line-height:1.28}
 .unit-recommendations{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-bottom:13px;padding:12px 14px}
 .unit-recommendations h3{font-size:16px}
 .unit-recommendations ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;margin:8px 0 0;padding:0;list-style:none}
-.unit-recommendations li{min-width:0;display:flex;align-items:start;gap:8px;padding:8px;border-radius:7px;background:#f6f3ff}
-.unit-recommendations li .badge,.recommendation-duration{flex:none}
+.unit-recommendations li{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:3px 8px;padding:8px;border-radius:7px;background:#f6f3ff}
 .unit-recommendations li a{font-size:14px;overflow-wrap:anywhere;line-height:1.5}
-.recommendation-duration{margin-left:auto;font-size:12px;color:var(--muted)}
+.recommendation-meta{grid-column:2;font-size:12px;color:var(--muted)}
 .filter-chip,.clear-filters{min-height:34px;border:1px solid #dfd7fa;border-radius:7px;padding:3px 9px;background:#f2eeff;color:#443192;font-size:12px;font-weight:700}
 .filter-chip{display:inline-flex;gap:8px;align-items:center;max-width:100%;text-align:left;overflow-wrap:anywhere}
 .filter-chip span[aria-hidden]{font-size:17px}
