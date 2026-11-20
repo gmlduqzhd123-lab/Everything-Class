@@ -17,6 +17,20 @@ export function videoTypes(video) {
   return taggedCategories(video, '유형:', videoTypeNames);
 }
 
+export const recommendedStages = ['도입', '정리'];
+
+export function recommendationStages(video, stages = lessonStages(video)) {
+  return taggedCategories(video, '추천:', recommendedStages).filter((stage) => stages.includes(stage));
+}
+
+export function playbackGuide(video) {
+  const tags = video.tags.map((tag) => tag.normalize('NFKC').trim());
+  const status = tags.includes('재생:교체') ? 'replace' : tags.includes('재생:정상') ? 'checked' : '';
+  const checkedOn = tags.find((tag) => /^재생확인:\d{4}-\d{2}-\d{2}$/.test(tag))?.slice('재생확인:'.length);
+  const alternativeId = tags.find((tag) => /^대체:[\w-]{11}$/.test(tag))?.slice('대체:'.length);
+  return { status, checkedOn, alternativeId };
+}
+
 const headers = [
   '유튜브 링크', '표시 제목', '채널명', '영상 길이(초)', '학년·교과',
   '수업 주제', '수업 활용 팁', '마지막 확인일', '학기', '단원',

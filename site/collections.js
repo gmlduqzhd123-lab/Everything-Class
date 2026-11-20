@@ -1,4 +1,6 @@
 export const collectionVideoLimit = 12;
+export const backupSizeLimit = 2_000_000;
+const backupFormat = 'everything-class-library';
 
 export function cleanVideoIds(ids) {
   return Array.isArray(ids)
@@ -31,4 +33,41 @@ export function moveCollectionVideo(ids, index, offset) {
   const next = ids.slice();
   [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
   return next;
+}
+
+export function exportLibrary({ favorites, collections }) {
+  return JSON.stringify({ format: backupFormat, version: 1, favorites, collections }, null, 2);
+}
+
+export function readLibraryBackup(text) {
+  const data = JSON.parse(text);
+  if (data?.format !== backupFormat || data.version !== 1
+      || !Array.isArray(data.favorites) || !Array.isArray(data.collections)) throw new Error('invalid backup');
+
+  const favorites = cleanVideoIds(data.favorites);
+  const collections = readCollections(data.collections);
+  if (favorites.length !== data.favorites.length || collections.length !== data.collections.length
+      || collections.some((item, i) => !Array.isArray(data.collections[i].videos)
+        || item.videos.length !== data.collections[i].videos.length)) {
+    throw new Error('invalid backup contents');
+  }
+  return { favorites, collections };
+}
+
+export function mergeLibrary(current, backup, newId = () => crypto.randomUUID()) {
+  const favorites = [...new Set([...current.favorites, ...backup.favorites])];
+  const collections = [...current.collections];
+  const ids = new Set(collections.map(({ id }) => id));
+  const signature = ({ name, videos }) => JSON.stringify([name, videos]);
+  const contents = new Set(collections.map(signature));
+  for (const item of backup.collections) {
+    const key = signature(item);
+    if (contents.has(key)) continue;
+    let id = item.id;
+    while (ids.has(id)) id = newId();
+    ids.add(id);
+    contents.add(key);
+    collections.push({ ...item, id });
+  }
+  return { ...current, favorites, collections };
 }

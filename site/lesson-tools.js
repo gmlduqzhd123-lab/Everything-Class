@@ -33,11 +33,18 @@ export function unitKey({ grade, subject, term, label }) {
 export function alternativeVideos(video, videos, preferredUnits, unavailable) {
   const wanted = new Set((preferredUnits.length ? preferredUnits : video.units).map(unitKey));
   if (!wanted.size) return [];
-  return videos.filter((item) => item.id !== video.id && !unavailable.has(item.id)
+  return videos.filter((item) => item.id !== video.id && !unavailable.has(item.id) && item.playback?.status !== 'replace'
     && item.units.some((unit) => wanted.has(unitKey(unit))))
     .sort((a, b) => Number(b.channel !== video.channel) - Number(a.channel !== video.channel)
       || Number(b.stages.some((stage) => video.stages.includes(stage))) - Number(a.stages.some((stage) => video.stages.includes(stage)))
       || a.duration - b.duration).slice(0, 3);
+}
+
+export function designatedAlternative(video, videosById, preferredUnits, unavailable) {
+  const alternative = videosById.get(video.playback?.alternativeId);
+  if (!alternative || alternative.id === video.id || unavailable.has(alternative.id) || alternative.playback?.status === 'replace') return;
+  const units = new Set((preferredUnits.length ? preferredUnits : video.units).map(unitKey));
+  return alternative.units.some((entry) => units.has(unitKey(entry))) ? alternative : undefined;
 }
 
 export function unitCoverage(reference, videos, now = Date.now()) {

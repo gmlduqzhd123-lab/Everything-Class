@@ -1,8 +1,9 @@
 import { grades, curriculum, integrated, occasionSubject, subjectOptions } from './curriculum.js';
-import { isCatalogResponseUrl, lessonStageNames, lessonStages, lessonUnits, occasionMonths, parseCatalog,
-  publishedCatalogRequestUrl, readCatalogCsv, videoTypeNames, videoTypes } from './catalog.js';
-import { cleanVideoIds, collectionVideoLimit, moveCollectionVideo, readCollections, readSharedCollection } from './collections.js';
-import { alternativeVideos, catalogClassification, compareClassifications, unitCoverage } from './lesson-tools.js';
+import { isCatalogResponseUrl, lessonStageNames, lessonStages, lessonUnits, occasionMonths, parseCatalog, playbackGuide,
+  publishedCatalogRequestUrl, readCatalogCsv, recommendationStages, recommendedStages, videoTypeNames, videoTypes } from './catalog.js';
+import { backupSizeLimit, cleanVideoIds, collectionVideoLimit, exportLibrary, mergeLibrary, moveCollectionVideo,
+  readCollections, readLibraryBackup, readSharedCollection } from './collections.js';
+import { alternativeVideos, catalogClassification, compareClassifications, designatedAlternative, unitCoverage } from './lesson-tools.js';
 
 const $ = (selector) => document.querySelector(selector);
 const search = $('.search');
@@ -17,6 +18,10 @@ const lessonStage = $('#lesson-stage');
 const videoType = $('#video-type');
 const order = $('#order');
 const activeFilters = $('#active-filters');
+const recommendations = $('#unit-recommendations');
+const advancedFilters = $('#advanced-filters');
+const toggleAdvanced = $('#toggle-advanced');
+const compactFilters = matchMedia('(max-width: 560px)');
 const results = $('#results');
 const count = $('#results-count');
 const libraryTitle = $('#library-title');
@@ -61,6 +66,7 @@ let playerTimer;
 let toastTimer;
 let renderedVideo;
 let detailReturn;
+let classroom;
 let shelfNeedsRender = false;
 
 function element(tag, content, className) {
@@ -325,11 +331,48 @@ function readPersonal() {
   }
 }
 
-function storePersonal() {
+function storePersonal(data = personal) {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(personal));
+    localStorage.setItem(storageKey, JSON.stringify(data));
+    return true;
   } catch {
-    $('#shelf-controls p').textContent = '브라우저 저장을 사용할 수 없어 이 탭을 닫으면 목록이 지워집니다.';
+    $('#shelf-storage-status').textContent = '브라우저 저장을 사용할 수 없어 이 탭을 닫으면 변경 사항이 사라질 수 있습니다.';
+    return false;
+  }
+}
+
+function downloadLibrary() {
+  const data = new Blob([exportLibrary(personal)], { type: 'application/json' });
+  const url = URL.createObjectURL(data);
+  const link = element('a');
+  link.href = url;
+  link.download = '초등-수업-대백과-영상함-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function restoreLibrary(file) {
+  const status = $('#library-backup-status');
+  status.hidden = false;
+  status.textContent = '백업 파일을 확인하는 중입니다.';
+  try {
+    if (file.size > backupSizeLimit) throw new Error('large file');
+    const backup = readLibraryBackup(await file.text());
+    const merged = mergeLibrary(personal, backup);
+    const added = [merged.favorites.length - personal.favorites.length, merged.collections.length - personal.collections.length];
+    if ((added[0] || added[1]) && !storePersonal(merged)) {
+      status.textContent = '브라우저에 저장할 수 없습니다. 파일을 보관한 뒤 다른 브라우저에서 다시 시도해 주세요.';
+      return;
+    }
+    Object.assign(personal, merged);
+    selectedCollectionId ??= personal.collections[0]?.id;
+    renderList();
+    status.textContent = added[0] || added[1] ? '즐겨찾기 ' + added[0] + '편과 꾸러미 ' + added[1] + '개를 추가했습니다.'
+      : '백업의 즐겨찾기와 꾸러미가 이미 있습니다.';
+  } catch {
+    status.textContent = '초등 수업 대백과에서 내보낸 JSON 백업 파일을 선택해 주세요.';
   }
 }
 
@@ -492,6 +535,16 @@ function renderCollections() {
     }));
     panel.append(actions);
   }
+  const playable = current.videos.filter((id) => videosById.has(id));
+  if (playable.length) {
+    const show = button('교실 화면 열기', () => {
+      classroom = { name: current.name, videos: playable, index: 0 };
+      detailReturn = { link: show, x: window.scrollX, y: window.scrollY };
+      updateUrl((params) => params.set('video', playable[0]), 'pushState', { fromList: true });
+      syncDetail();
+    }, 'primary');
+    panel.append(show);
+  }
   const list = element('ol', '', 'collection-list');
   current.videos.forEach((id, index) => {
     const video = videosById.get(id);
@@ -628,6 +681,26 @@ function showView(next) {
   }
 }
 
+function renderUnitRecommendations(matching, state) {
+  const items = [];
+  if (state.unit) {
+    for (const stage of recommendedStages) {
+      const video = matching.find((item) => item.recommendations.includes(stage)
+        && item.playback.status !== 'replace' && !unavailableVideos.has(item.id));
+      if (!video) continue;
+      const item = element('li');
+      const link = element('a', video.title, 'card-title');
+      link.href = videoUrl(video.id);
+      link.addEventListener('click', (event) => openFromCard(event, video, link, false));
+      item.append(element('span', stage, 'badge stage-badge'), link,
+        element('span', stamp(video.duration), 'recommendation-duration'));
+      items.push(item);
+    }
+  }
+  $('#unit-recommendation-items').replaceChildren(...items);
+  recommendations.hidden = !items.length;
+}
+
 function renderList() {
   const state = getFilters();
   const browsing = view === 'browse';
@@ -648,6 +721,7 @@ function renderList() {
     : Object.keys(filterLabels).some((key) => state[key]) ? '검색 결과' : '전체 영상')
     : shelf === 'favorites' ? '즐겨찾기' : '최근 재생';
   moreRow.hidden = true;
+  recommendations.hidden = true;
   if (loadState === 'loading') return;
   if (loadState === 'error') {
     count.textContent = '영상 목록을 불러오지 못했습니다.';
@@ -663,6 +737,7 @@ function renderList() {
 
   const matching = browsing ? matchingVideos(state, true)
     : personal[shelf].map((id) => videosById.get(id)).filter(Boolean);
+  if (browsing) renderUnitRecommendations(matching, state);
   count.textContent = matching.length.toLocaleString('ko') + '개의 영상';
   if (!matching.length) {
     renderEmpty(state);
@@ -687,12 +762,14 @@ function closeDetail() {
   }
 }
 
-function syncDetail(autoplay = false) {
+function syncDetail(autoplay = false, force = false) {
   const id = new URLSearchParams(location.search).get('video');
   if (!id || loadState !== 'ready') {
     if (detail.open) {
       stopPlayer();
       detail.close();
+      detail.classList.remove('classroom-mode');
+      classroom = undefined;
       detailBody.replaceChildren();
       renderedVideo = undefined;
       if (shelfNeedsRender) renderList();
@@ -706,7 +783,7 @@ function syncDetail(autoplay = false) {
     }
     return;
   }
-  if (detail.open && renderedVideo === id) return;
+  if (detail.open && renderedVideo === id && !force) return;
   stopPlayer();
   renderedVideo = id;
   const video = videosById.get(id);
@@ -714,8 +791,12 @@ function syncDetail(autoplay = false) {
   const top = element('div', '', 'detail-top');
   const heading = element('h2', video?.title || '영상을 찾을 수 없습니다');
   heading.id = 'video-title';
-  const close = button('닫기', closeDetail);
-  top.append(heading, close);
+  const close = button(classroom ? '꾸러미로 돌아가기' : '닫기', closeDetail);
+  if (classroom) {
+    const title = element('div', '', 'classroom-heading');
+    title.append(element('p', classroom.name, 'detail-meta'), heading);
+    top.append(title, close);
+  } else top.append(heading, close);
   content.append(top);
 
   let start;
@@ -729,9 +810,11 @@ function syncDetail(autoplay = false) {
   }
 
   detailBody.replaceChildren(content);
+  detail.classList.toggle('classroom-mode', Boolean(classroom));
   if (!detail.open) detail.showModal();
-  if (autoplay && start) start();
-  close.focus({ preventScroll: true });
+  if (autoplay && start && video.playback.status !== 'replace') start();
+  else close.focus({ preventScroll: true });
+  detail.scrollTop = 0;
 }
 
 function renderVideoDetail(content, video) {
@@ -744,15 +827,16 @@ function renderVideoDetail(content, video) {
     const entries = video.units.map((entry) => entry.grade + '학년 ' + entry.subject + ' · ' + unitLabel(entry));
     content.append(element('p', [...new Set(entries)].join(' / '), 'detail-meta'));
   }
-  const series = collectionView() ? activeCollection()?.videos.filter((id) => videosById.has(id)) : [];
-  const position = series?.indexOf(video.id) ?? -1;
+  const series = classroom?.videos ?? (collectionView() ? activeCollection()?.videos.filter((id) => videosById.has(id)) : []);
+  const position = classroom?.index ?? series?.indexOf(video.id) ?? -1;
   if (position >= 0) {
     const controls = element('div', '', 'collection-playback');
     const jump = (offset, label) => {
       const destination = series[position + offset];
       const control = button(label, () => {
+        if (classroom) classroom.index += offset;
         updateUrl((params) => params.set('video', destination));
-        syncDetail(true);
+        syncDetail(true, Boolean(classroom));
       });
       control.disabled = !destination;
       return control;
@@ -776,6 +860,13 @@ function renderVideoDetail(content, video) {
   message.hidden = true;
   const alternatives = element('aside', '', 'playback-alternatives');
   alternatives.hidden = true;
+  if (video.playback.status === 'replace') {
+    message.textContent = '재생 점검에서 교체가 필요한 영상입니다.' + (video.playback.checkedOn ? ' · ' + video.playback.checkedOn : '');
+    message.hidden = false;
+    showAlternatives(video, alternatives);
+  } else if (video.playback.status === 'checked' && video.playback.checkedOn) {
+    content.append(element('p', '최근 재생 점검 · ' + video.playback.checkedOn, 'detail-meta playback-checked'));
+  }
 
   const tip = element('div', '', 'detail-tip');
   tip.append(element('strong', '수업 활용 팁'), ...video.tip.split(/\r?\n/).filter(Boolean).map((text) => element('p', text)));
@@ -784,7 +875,8 @@ function renderVideoDetail(content, video) {
   }
 
   const actions = element('div', '', 'detail-actions');
-  const play = button(video.start !== null ? '추천 구간 재생' : '영상 재생', start, 'primary');
+  const play = button(video.playback.status === 'replace' ? '원본 재생 시도'
+    : video.start !== null ? '추천 구간 재생' : '영상 재생', start, 'primary');
   const source = element('a', 'YouTube에서 열기 ↗', 'quiet');
   source.href = 'https://www.youtube.com/watch?v=' + video.id;
   source.target = '_blank';
@@ -809,22 +901,28 @@ function showAlternatives(video, panel) {
   if (!panel.hidden) return;
   const state = getFilters();
   const units = matchingUnits(video, state).filter((entry) => !state.unit || state.unit === unitLabel(entry));
+  const assigned = designatedAlternative(video, videosById, units, unavailableVideos);
   const candidates = alternativeVideos(video, videos, units, unavailableVideos);
-  if (!candidates.length) return;
+  if (assigned) candidates.unshift(assigned);
+  const choices = [...new Set(candidates)].slice(0, 3);
+  if (!choices.length) return;
   const list = element('ul');
-  for (const item of candidates) {
-    list.append(element('li'));
+  for (const item of choices) {
+    const entry = element('li');
     const link = element('a', item.title + ' · ' + stamp(item.duration), 'card-title');
     link.href = videoUrl(item.id);
     link.addEventListener('click', (event) => {
       if (event.button || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       event.preventDefault();
+      if (classroom) classroom.videos[classroom.index] = item.id;
       updateUrl((params) => params.set('video', item.id));
       syncDetail(true);
     });
-    list.lastElementChild.append(link);
+    if (item === assigned) entry.append(element('strong', '지정 대체 · '));
+    entry.append(link);
+    list.append(entry);
   }
-  panel.replaceChildren(element('strong', '같은 단원의 다른 영상'), list);
+  panel.replaceChildren(element('strong', '같은 단원 대체 영상'), list);
   panel.hidden = false;
 }
 
@@ -1137,9 +1235,11 @@ async function loadCatalog() {
       current: online && records.length === catalog.videos.length && JSON.stringify(records) === JSON.stringify(catalog.videos) };
     videos = records.map((video) => {
       const units = lessonUnits(video);
+      const stages = lessonStages(video);
       const searchTitle = normalize(video.title);
       const searchUnit = normalize([video.unit, ...units.map(({ label }) => label)].filter(Boolean).join(' '));
-      return { ...video, months: occasionMonths(video), stages: lessonStages(video), types: videoTypes(video),
+      return { ...video, months: occasionMonths(video), stages, types: videoTypes(video),
+        recommendations: recommendationStages(video, stages), playback: playbackGuide(video),
         units, searchTitle, searchUnit,
         search: [searchTitle, searchUnit, normalize([video.topic, video.channel, ...video.tags,
           ...video.classes.map(({ subject }) => subject)].filter(Boolean).join(' '))].join(' ') };
@@ -1162,6 +1262,18 @@ renderOccasionMonths();
 lessonStage.append(...lessonStageNames.map((stage) => new Option(stage, stage)));
 videoType.append(...videoTypeNames.map((type) => new Option(type, type)));
 restoreFilters(new URLSearchParams(location.search));
+function syncAdvancedFilters() {
+  const expanded = toggleAdvanced.getAttribute('aria-expanded') === 'true';
+  advancedFilters.hidden = compactFilters.matches && !expanded;
+  toggleAdvanced.textContent = expanded ? '상세 조건 접기' : '상세 조건';
+}
+compactFilters.addEventListener('change', syncAdvancedFilters);
+toggleAdvanced.addEventListener('click', () => {
+  toggleAdvanced.setAttribute('aria-expanded', String(advancedFilters.hidden));
+  syncAdvancedFilters();
+});
+syncAdvancedFilters();
+
 search.addEventListener('submit', (event) => {
   event.preventDefault();
   leaveSharedCollection();
@@ -1191,6 +1303,13 @@ filters.addEventListener('change', (event) => {
 order.addEventListener('change', changeFilters);
 $('#browse').addEventListener('click', () => showView('browse'));
 $('#video-shelf').addEventListener('click', () => showView('shelf'));
+$('#export-library').addEventListener('click', downloadLibrary);
+$('#import-library').addEventListener('click', () => $('#library-backup-file').click());
+$('#library-backup-file').addEventListener('change', (event) => {
+  const [file] = event.target.files;
+  event.target.value = '';
+  if (file) void restoreLibrary(file);
+});
 $('#shelf-controls').addEventListener('click', (event) => {
   const next = event.target.closest('[data-shelf]')?.dataset.shelf;
   if (!next || next === shelf) return;
